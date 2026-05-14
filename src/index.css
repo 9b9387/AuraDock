@@ -60,6 +60,25 @@ button:hover {
   color: #aaa;
 }
 
+#scrcpy-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+#scrcpy-toolbar button {
+  padding: 4px 8px;
+  font-size: 0.8em;
+  background-color: #444;
+}
+
+#scrcpy-toolbar button:hover {
+  background-color: #555;
+}
+
+#btn-record.recording {
+  background-color: #ff4444;
+}
+
 #scrcpy-canvas {
   max-width: 100%;
   max-height: 80vh;

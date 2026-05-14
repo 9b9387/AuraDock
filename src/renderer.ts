@@ -11,11 +11,65 @@ const backBtn = document.getElementById('back-to-list') as HTMLButtonElement;
 const scrcpyStatus = document.getElementById('scrcpy-status') as HTMLSpanElement;
 const scrcpyError = document.getElementById('scrcpy-error') as HTMLDivElement;
 
+const btnScreenshot = document.getElementById('btn-screenshot') as HTMLButtonElement;
+const btnRecord = document.getElementById('btn-record') as HTMLButtonElement;
+
 let currentPort: MessagePort | null = null;
 let decoder: VideoDecoder | null = null;
 let videoWidth = 0;
 let videoHeight = 0;
 let ctx: CanvasRenderingContext2D | null = null;
+
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+
+function takeScreenshot() {
+  if (!scrcpyCanvas) return;
+  const dataUrl = scrcpyCanvas.toDataURL('image/png');
+  const link = document.createElement('a');
+  link.download = `screenshot-${Date.now()}.png`;
+  link.href = dataUrl;
+  link.click();
+}
+
+function toggleRecording() {
+  if (!mediaRecorder) {
+    const stream = scrcpyCanvas.captureStream(30);
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+    recordedChunks = [];
+    
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+    
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `record-${Date.now()}.webm`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+    
+    mediaRecorder.start();
+    btnRecord.textContent = 'Stop Record';
+    btnRecord.classList.add('recording');
+  } else {
+    mediaRecorder.stop();
+    mediaRecorder = null;
+    btnRecord.textContent = 'Start Record';
+    btnRecord.classList.remove('recording');
+  }
+}
+
+function sendControl(type: string, data: any = {}) {
+  if (!currentPort) return;
+  currentPort.postMessage({ type: 'control-action', actionType: type, data });
+}
+
+btnScreenshot.onclick = takeScreenshot;
+btnRecord.onclick = toggleRecording;
 
 async function refreshDevices() {
   deviceList.innerHTML = '<li>Loading...</li>';

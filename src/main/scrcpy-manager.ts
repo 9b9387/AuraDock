@@ -76,6 +76,8 @@ export class ScrcpyManager {
             screenHeight: msg.data.videoHeight,
             pressure: msg.data.pressure,
           });
+        } else if (msg.type === 'control-action') {
+          // Additional control actions can be handled here
         }
       });
       port.start();
