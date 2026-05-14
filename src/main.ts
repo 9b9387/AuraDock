@@ -18,12 +18,6 @@ const ensureAssets = () => {
 };
 
 const createWindow = () => {
-  // Ensure scrcpy assets are available in the build directory
-  ensureAssets();
-
-  // Setup Scrcpy handlers
-  scrcpyManager.setupHandlers();
-
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 800,
@@ -49,7 +43,15 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  // Ensure scrcpy assets are available in the build directory
+  ensureAssets();
+
+  // Setup Scrcpy handlers once at startup
+  scrcpyManager.setupHandlers();
+
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
