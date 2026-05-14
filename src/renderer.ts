@@ -28,7 +28,7 @@ async function refreshDevices() {
     }
     devices.forEach((device: AdbDeviceInfo) => {
       const li = document.createElement('li');
-      const serial = (device as any).id || (device as any).serial;
+      const serial = device.serial || (device as any).id;
       li.textContent = `${device.model || serial} (${serial})`;
       const connectBtn = document.createElement('button');
       connectBtn.textContent = 'Connect';
@@ -211,4 +211,6 @@ refreshBtn.onclick = refreshDevices;
 refreshDevices();
 
 // Activate the port listener
-window.adb.onScrcpyPort(() => {});
+window.adb.onScrcpyPort((port) => {
+  console.log('[Renderer] Scrcpy port registered via callback', port);
+});

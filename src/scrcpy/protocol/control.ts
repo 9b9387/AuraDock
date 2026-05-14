@@ -1,94 +1,5 @@
 import { Buffer } from "node:buffer";
 
-// ---------------------------------------------------------------------------
-// Stream meta constants
-// ---------------------------------------------------------------------------
-
-export const SESSION_PACKET_FLAG = 1n << 63n;
-export const CONFIG_PACKET_FLAG = 1n << 62n;
-export const KEY_FRAME_FLAG = 1n << 61n;
-export const PTS_MASK = (1n << 61n) - 1n;
-
-export enum VideoCodec {
-  H264 = "h264",
-  H265 = "h265",
-  AV1 = "av1",
-}
-
-export enum AudioCodec {
-  OPUS = "opus",
-  AAC = "aac",
-  FLAC = "flac",
-  RAW = "raw",
-}
-
-function getCodecId(name: string): number {
-  const buf = Buffer.alloc(4, 0);
-  const nameBuf = Buffer.from(name, "ascii");
-  nameBuf.copy(buf, 4 - nameBuf.length);
-  return buf.readUInt32BE(0);
-}
-
-export const VIDEO_CODEC_IDS: Record<number, VideoCodec> = Object.fromEntries(
-  Object.values(VideoCodec).map((c) => [getCodecId(c), c])
-);
-
-export const AUDIO_CODEC_IDS: Record<number, AudioCodec> = Object.fromEntries(
-  Object.values(AudioCodec).map((c) => [getCodecId(c), c])
-);
-
-// ---------------------------------------------------------------------------
-// Frame headers
-// ---------------------------------------------------------------------------
-
-export interface SessionPacket {
-  kind: "session";
-  width: number;
-  height: number;
-  clientResized: boolean;
-}
-
-export interface FrameMeta {
-  kind: "frame";
-  ptsUs: bigint;
-  size: number;
-  config: boolean;
-  keyFrame: boolean;
-}
-
-export function parseFrameHeader(header: Buffer): SessionPacket | FrameMeta {
-  if (header.length !== 12) {
-    throw new Error(`frame header must be 12 bytes, got ${header.length}`);
-  }
-
-  const ptsAndFlags = header.readBigUInt64BE(0);
-  const size = header.readUInt32BE(8);
-
-  if (ptsAndFlags & SESSION_PACKET_FLAG) {
-    const flagsHigh = Number((ptsAndFlags >> 32n) & 0xffffffffn);
-    const width = Number(ptsAndFlags & 0xffffffffn);
-    const height = size;
-    return {
-      kind: "session",
-      width,
-      height,
-      clientResized: (flagsHigh & 0x01) !== 0,
-    };
-  }
-
-  return {
-    kind: "frame",
-    ptsUs: ptsAndFlags & PTS_MASK,
-    size,
-    config: (ptsAndFlags & CONFIG_PACKET_FLAG) !== 0n,
-    keyFrame: (ptsAndFlags & KEY_FRAME_FLAG) !== 0n,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Control messages (client -> device)
-// ---------------------------------------------------------------------------
-
 export enum ControlMessageType {
   INJECT_KEYCODE = 0,
   INJECT_TEXT = 1,
@@ -131,18 +42,6 @@ export const POINTER_ID_GENERIC_FINGER = -2n; // 0xFFFF_FFFF_FFFF_FFFE
 export const INJECT_TEXT_MAX_LENGTH = 300;
 export const SET_CLIPBOARD_TEXT_MAX_LENGTH = (1 << 18) - 1;
 
-function u16FixedPoint(value: number): number {
-  if (value >= 1.0) return 0xffff;
-  if (value <= 0.0) return 0;
-  return Math.floor(value * 0x10000) & 0xffff;
-}
-
-function i16FixedPoint(value: number): number {
-  if (value >= 1.0) return 0x7fff;
-  if (value <= -1.0) return 0x8000; // stored as unsigned 16-bit
-  return Math.floor(value * 0x8000) & 0xffff;
-}
-
 export interface ControlMessage {
   type: ControlMessageType;
   action?: number;
@@ -166,6 +65,34 @@ export interface ControlMessage {
   on?: boolean;
   width?: number;
   height?: number;
+}
+
+function u16FixedPoint(value: number): number {
+  if (value >= 1.0) return 0xffff;
+  if (value <= 0.0) return 0;
+  return Math.floor(value * 0x10000) & 0xffff;
+}
+
+function i16FixedPoint(value: number): number {
+  if (value >= 1.0) return 0x7fff;
+  if (value <= -1.0) return 0x8000; // stored as unsigned 16-bit
+  return Math.floor(value * 0x8000) & 0xffff;
+}
+
+function truncateUtf8(text: string, maxBytes: number): Buffer {
+  const buf = Buffer.from(text, "utf-8");
+  if (buf.length <= maxBytes) return buf;
+
+  let end = maxBytes;
+  // If the last byte is a continuation byte (10xxxxxx), move back
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) {
+    end--;
+  }
+  // If the last byte is a leading byte of a multi-byte sequence, drop it
+  if (end > 0 && (buf[end] & 0x80) !== 0) {
+    end--;
+  }
+  return buf.subarray(0, end);
 }
 
 export function serializeControlMessage(msg: ControlMessage): Buffer {
@@ -263,68 +190,5 @@ export function serializeControlMessage(msg: ControlMessage): Buffer {
     }
     default:
       throw new Error(`unsupported control message type: ${type}`);
-  }
-}
-
-function truncateUtf8(text: string, maxBytes: number): Buffer {
-  const buf = Buffer.from(text, "utf-8");
-  if (buf.length <= maxBytes) return buf;
-
-  let end = maxBytes;
-  // If the last byte is a continuation byte (10xxxxxx), move back
-  while (end > 0 && (buf[end] & 0xc0) === 0x80) {
-    end--;
-  }
-  // If the last byte is a leading byte of a multi-byte sequence, drop it
-  if (end > 0 && (buf[end] & 0x80) !== 0) {
-    end--;
-  }
-  return buf.subarray(0, end);
-}
-
-// ---------------------------------------------------------------------------
-// Device messages (device -> client)
-// ---------------------------------------------------------------------------
-
-export enum DeviceMessageType {
-  CLIPBOARD = 0,
-  ACK_CLIPBOARD = 1,
-  UHID_OUTPUT = 2,
-}
-
-export interface DeviceMessage {
-  type: DeviceMessageType;
-  text?: string;
-  sequence?: bigint;
-  uhidId?: number;
-  data?: Buffer;
-}
-
-export async function parseDeviceMessage(
-  readExact: (n: number) => Promise<Buffer>
-): Promise<DeviceMessage> {
-  const head = await readExact(1);
-  const type = head[0] as DeviceMessageType;
-
-  switch (type) {
-    case DeviceMessageType.CLIPBOARD: {
-      const lenBuf = await readExact(4);
-      const length = lenBuf.readUInt32BE(0);
-      const textBuf = await readExact(length);
-      return { type, text: textBuf.toString("utf-8") };
-    }
-    case DeviceMessageType.ACK_CLIPBOARD: {
-      const seqBuf = await readExact(8);
-      return { type, sequence: seqBuf.readBigUInt64BE(0) };
-    }
-    case DeviceMessageType.UHID_OUTPUT: {
-      const metaBuf = await readExact(4);
-      const uhidId = metaBuf.readUInt16BE(0);
-      const length = metaBuf.readUInt16BE(2);
-      const data = await readExact(length);
-      return { type, uhidId, data };
-    }
-    default:
-      throw new Error(`unknown device message type: ${type}`);
   }
 }

@@ -2,28 +2,24 @@ import { Buffer } from "node:buffer";
 import * as net from "node:net";
 import { EventEmitter } from "node:events";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-import adbkit from "@u4/adbkit";
-const Adb = (adbkit as any).default || adbkit;
+import adbkit, { Client, Device } from "@u4/adbkit";
 import {
   AudioCodec,
   AUDIO_CODEC_IDS,
   ControlMessage,
-  DeviceMessage,
-  FrameMeta,
   parseDeviceMessage,
   parseFrameHeader,
   serializeControlMessage,
   SessionPacket,
   VideoCodec,
   VIDEO_CODEC_IDS,
-} from "./protocol";
+} from "../protocol";
+import { StreamReader } from "./stream-reader";
 
-// Remove ESM __dirname shim if it might conflict with Vite's __dirname
-// const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const Adb = (adbkit as unknown as { default: typeof adbkit }).default || adbkit;
 
 export const SCRCPY_V4_VERSION = "4.0";
-const DEFAULT_SOCKET_NAME = "scrcpy_00000004";
+const DEFAULT_SOCKET_NAME = "scrcpy_0000000a";
 
 export interface StreamMeta {
   deviceName: string;
@@ -33,7 +29,7 @@ export interface StreamMeta {
   height: number;
 }
 
-export interface BackendOptions {
+export interface DeviceClientOptions {
   deviceSerial?: string;
   maxSize?: number;
   maxFps?: number;
@@ -50,50 +46,15 @@ export interface BackendOptions {
   serverJarPath?: string;
 }
 
-class StreamReader {
-  private buffer = Buffer.alloc(0);
-  private waiters: { n: number; resolve: (buf: Buffer) => void; reject: (err: Error) => void }[] = [];
-  private ended = false;
-
-  constructor(private stream: net.Socket) {
-    stream.on("data", (chunk) => {
-      this.buffer = Buffer.concat([this.buffer, chunk]);
-      this.checkWaiters();
-    });
-    stream.on("error", (err) => {
-      this.waiters.forEach((w) => w.reject(err));
-      this.waiters = [];
-    });
-    stream.on("end", () => {
-      this.ended = true;
-      this.waiters.forEach((w) => w.reject(new Error("stream ended")));
-      this.waiters = [];
-    });
-  }
-
-  readExact(n: number): Promise<Buffer> {
-    if (this.ended) return Promise.reject(new Error("stream already ended"));
-    return new Promise((resolve, reject) => {
-      this.waiters.push({ n, resolve, reject });
-      this.checkWaiters();
-    });
-  }
-
-  private checkWaiters() {
-    while (this.waiters.length > 0 && this.buffer.length >= this.waiters[0].n) {
-      const waiter = this.waiters.shift()!;
-      const chunk = this.buffer.subarray(0, waiter.n);
-      this.buffer = this.buffer.subarray(waiter.n);
-      waiter.resolve(chunk);
-    }
-  }
-}
-
-export class ScrcpyV4Backend extends EventEmitter {
-  private options: Required<BackendOptions>;
-  private adb = Adb.createClient();
-  private device: any = null;
-  private serverStream: any = null;
+/**
+ * ScrcpyDeviceClient handles the low-level ADB connection, server deployment,
+ * and raw socket communication with the scrcpy-server on the Android device.
+ */
+export class ScrcpyDeviceClient extends EventEmitter {
+  private options: Required<DeviceClientOptions>;
+  private adb: Client = Adb.createClient();
+  private device: Device | null = null;
+  private serverStream: net.Socket | null = null;
   private videoSocket: net.Socket | null = null;
   private audioSocket: net.Socket | null = null;
   private controlSocket: net.Socket | null = null;
@@ -103,7 +64,7 @@ export class ScrcpyV4Backend extends EventEmitter {
   private running = false;
   private meta: StreamMeta | null = null;
 
-  constructor(options: BackendOptions = {}) {
+  constructor(options: DeviceClientOptions = {}) {
     super();
     this.options = {
       deviceSerial: options.deviceSerial || "",
@@ -158,6 +119,7 @@ export class ScrcpyV4Backend extends EventEmitter {
   }
 
   private async spawnServer(): Promise<void> {
+    if (!this.device) throw new Error("no device");
     const devicePath = `/data/local/tmp/scrcpy-server-v${SCRCPY_V4_VERSION}.jar`;
     await this.device.push(this.options.serverJarPath, devicePath);
 
@@ -190,7 +152,7 @@ export class ScrcpyV4Backend extends EventEmitter {
       "clipboard_autosync=false",
     ];
 
-    this.serverStream = await this.device.shell(args.join(" "));
+    this.serverStream = (await this.device.shell(args.join(" "))) as unknown as net.Socket;
     
     this.serverStream.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf-8");
@@ -199,11 +161,12 @@ export class ScrcpyV4Backend extends EventEmitter {
 
     // Wait for initial server output or timeout
     await new Promise<void>((resolve, reject) => {
+      if (!this.serverStream) return reject(new Error("no server stream"));
       const timeout = setTimeout(() => reject(new Error("server spawn timeout")), this.options.deployTimeoutMs);
       
       const onData = () => {
         clearTimeout(timeout);
-        this.serverStream.removeListener("data", onData);
+        this.serverStream?.removeListener("data", onData);
         resolve();
       };
       this.serverStream.on("data", onData);
@@ -219,7 +182,8 @@ export class ScrcpyV4Backend extends EventEmitter {
   }
 
   private async connectSockets(): Promise<void> {
-    const order: string[] = [];
+    if (!this.device) throw new Error("no device");
+    const order: ("video" | "audio" | "control")[] = [];
     if (this.options.video) order.push("video");
     if (this.options.audio) order.push("audio");
     if (this.options.control) order.push("control");
@@ -232,14 +196,18 @@ export class ScrcpyV4Backend extends EventEmitter {
       while (Date.now() < deadline) {
         attempts++;
         try {
-          const socket = await this.device.openLocal(`localabstract:scrcpy_0000000a`);
-          (this as any)[`${name}Socket`] = socket;
+          const socket = (await this.device.openLocal(`localabstract:scrcpy_0000000a`)) as unknown as net.Socket;
+          if (name === "video") this.videoSocket = socket;
+          else if (name === "audio") this.audioSocket = socket;
+          else if (name === "control") this.controlSocket = socket;
+          
           connected = true;
           console.log(`Connected to ${name} socket on attempt ${attempts}`);
           break;
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
           if (attempts % 5 === 0) {
-            console.error(`Failed to connect to ${name} socket (attempt ${attempts}): ${e.message}`);
+            console.error(`Failed to connect to ${name} socket (attempt ${attempts}): ${msg}`);
           }
           await new Promise(r => setTimeout(r, 500));
         }
@@ -340,7 +308,7 @@ export class ScrcpyV4Backend extends EventEmitter {
     if (this.controlSocket) this.controlWorkerLoop();
   }
 
-  private async workerLoop(kind: "video" | "audio", socket: net.Socket, headerHandler: (header: Buffer) => Promise<void>): Promise<void> {
+  private async workerLoop(_kind: "video" | "audio", socket: net.Socket, headerHandler: (header: Buffer) => Promise<void>): Promise<void> {
     try {
       while (this.running) {
         const header = await this.socketReadExact(socket, 12);

@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("adb", {
   getDevices: () => ipcRenderer.invoke("adb:get-devices"),
   requestScrcpy: (serial: string) => ipcRenderer.send("adb:request-scrcpy", serial),
-  onScrcpyPort: (callback: (port: MessagePort) => void) => {
+  onScrcpyPort: (_callback: (port: MessagePort) => void) => {
     const listener = (event: Electron.IpcRendererEvent) => {
       const port = event.ports[0];
       // Pass the port to the renderer via window.postMessage

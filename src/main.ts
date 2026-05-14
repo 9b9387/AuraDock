@@ -1,8 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
-import fs from 'fs-extra';
+import { existsSync, copySync } from 'fs-extra';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -12,8 +12,8 @@ if (started) {
 const ensureAssets = () => {
   const assetsSrc = path.join(__dirname, '../../src/scrcpy/assets');
   const assetsDest = path.join(__dirname, 'assets');
-  if (fs.existsSync(assetsSrc)) {
-    fs.copySync(assetsSrc, assetsDest, { overwrite: true });
+  if (existsSync(assetsSrc)) {
+    copySync(assetsSrc, assetsDest, { overwrite: true });
   }
 };
 

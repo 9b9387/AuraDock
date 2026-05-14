@@ -1,20 +1,23 @@
 import { ipcMain, MessageChannelMain } from 'electron';
-import adbkit from '@u4/adbkit';
-import { ScrcpyV4Service, MediaKind, ControlMessageType } from '../scrcpy';
+import adbkit, { Client, Device } from '@u4/adbkit';
+import { MediaStreamService, MediaKind, ControlMessageType } from '../scrcpy';
 
-const Adb = (adbkit as any).default || adbkit;
+import { AdbDeviceInfo } from '../types';
+
+const Adb = (adbkit as unknown as { default: typeof adbkit }).default || adbkit;
 
 export class ScrcpyManager {
-  private adb = Adb.createClient();
-  private services: Map<string, ScrcpyV4Service> = new Map();
+  private adb: Client = Adb.createClient();
+  private services: Map<string, MediaStreamService> = new Map();
 
-  async getDevices() {
+  async getDevices(): Promise<AdbDeviceInfo[]> {
     try {
       const devices = await this.adb.listDevices();
-      return devices.map((d: any) => ({
+      return devices.map((d: Device) => ({
         id: d.id,
+        serial: d.id, // AdbDeviceInfo uses serial
         type: d.type
-      }));
+      })) as unknown as AdbDeviceInfo[];
     } catch (e) {
       console.error('Failed to list devices:', e);
       return [];
@@ -26,13 +29,14 @@ export class ScrcpyManager {
       this.services.get(serial)?.stop();
     }
 
-    const service = new ScrcpyV4Service({
+    const service = new MediaStreamService({
       deviceSerial: serial,
       maxSize: 1024,
       video: true,
       audio: false, // Renderer doesn't handle audio yet
       control: true,
     });
+
 
     this.services.set(serial, service);
 

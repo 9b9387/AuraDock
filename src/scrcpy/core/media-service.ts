@@ -1,15 +1,16 @@
 import { EventEmitter } from "node:events";
 import {
-  BackendOptions,
-  ScrcpyV4Backend,
+  DeviceClientOptions,
+  ScrcpyDeviceClient,
   StreamMeta,
-} from "./backend";
+} from "./device-client";
 import {
   ControlMessage,
   DeviceMessage,
   FrameMeta,
   SessionPacket,
-} from "./protocol";
+} from "../protocol";
+import { MediaKind, MediaPacket, MediaSubscriber } from "./media-subscriber";
 
 export enum StreamState {
   STOPPED = "stopped",
@@ -19,31 +20,21 @@ export enum StreamState {
   ERROR = "error",
 }
 
-export enum MediaKind {
-  VIDEO = "video",
-  AUDIO = "audio",
-  SESSION = "session",
-}
-
-export interface MediaPacket {
-  kind: MediaKind;
-  ptsUs: bigint;
-  config: boolean;
-  keyFrame: boolean;
-  payload: Buffer;
-  width?: number;
-  height?: number;
-}
-
-export interface ServiceOptions extends BackendOptions {
+export interface MediaServiceOptions extends DeviceClientOptions {
   queueMaxPackets?: number;
 }
 
-export class ScrcpyV4Service extends EventEmitter {
-  private backend: ScrcpyV4Backend;
+/**
+ * MediaStreamService manages the higher-level logic of the scrcpy stream:
+ * - Tracking stream state (stopped, running, error)
+ * - Caching configuration packets (SPS/PPS) and latest keyframes
+ * - Distributing media packets to subscribers
+ */
+export class MediaStreamService extends EventEmitter {
+  private client: ScrcpyDeviceClient;
   private state = StreamState.STOPPED;
   private meta: StreamMeta | null = null;
-  private options: Required<ServiceOptions>;
+  private options: Required<MediaServiceOptions>;
 
   private videoConfig: Buffer | null = null;
   private audioConfig: Buffer | null = null;
@@ -52,19 +43,19 @@ export class ScrcpyV4Service extends EventEmitter {
 
   private subscribers: Set<MediaSubscriber> = new Set();
 
-  constructor(options: ServiceOptions = {}) {
+  constructor(options: MediaServiceOptions = {}) {
     super();
     this.options = {
       queueMaxPackets: options.queueMaxPackets || 240,
       ...options,
-    } as Required<ServiceOptions>;
+    } as Required<MediaServiceOptions>;
 
-    this.backend = new ScrcpyV4Backend(this.options);
-    this.setupBackendListeners();
+    this.client = new ScrcpyDeviceClient(this.options);
+    this.setupClientListeners();
   }
 
-  private setupBackendListeners(): void {
-    this.backend.on("video", (meta: FrameMeta, payload: Buffer) => {
+  private setupClientListeners(): void {
+    this.client.on("video", (meta: FrameMeta, payload: Buffer) => {
       const packet: MediaPacket = {
         kind: MediaKind.VIDEO,
         ptsUs: meta.ptsUs,
@@ -77,7 +68,7 @@ export class ScrcpyV4Service extends EventEmitter {
       this.broadcast(packet);
     });
 
-    this.backend.on("audio", (meta: FrameMeta, payload: Buffer) => {
+    this.client.on("audio", (meta: FrameMeta, payload: Buffer) => {
       const packet: MediaPacket = {
         kind: MediaKind.AUDIO,
         ptsUs: meta.ptsUs,
@@ -89,7 +80,7 @@ export class ScrcpyV4Service extends EventEmitter {
       this.broadcast(packet);
     });
 
-    this.backend.on("session", (session: SessionPacket) => {
+    this.client.on("session", (session: SessionPacket) => {
       this.latestSession = session;
       const packet: MediaPacket = {
         kind: MediaKind.SESSION,
@@ -103,11 +94,11 @@ export class ScrcpyV4Service extends EventEmitter {
       this.broadcast(packet);
     });
 
-    this.backend.on("deviceMessage", (msg: DeviceMessage) => {
+    this.client.on("deviceMessage", (msg: DeviceMessage) => {
       this.emit("deviceMessage", msg);
     });
 
-    this.backend.on("error", (e: Error) => {
+    this.client.on("error", (e: Error) => {
       this.setState(StreamState.ERROR);
       this.emit("error", e);
       this.stop();
@@ -120,7 +111,7 @@ export class ScrcpyV4Service extends EventEmitter {
     }
     this.setState(StreamState.STARTING);
     try {
-      this.meta = await this.backend.start();
+      this.meta = await this.client.start();
       this.setState(StreamState.RUNNING);
       return this.meta;
     } catch (e) {
@@ -132,7 +123,7 @@ export class ScrcpyV4Service extends EventEmitter {
   stop(): void {
     if (this.state === StreamState.STOPPED) return;
     this.setState(StreamState.STOPPING);
-    this.backend.stop();
+    this.client.stop();
     this.videoConfig = null;
     this.audioConfig = null;
     this.latestKeyFrame = null;
@@ -143,7 +134,7 @@ export class ScrcpyV4Service extends EventEmitter {
   }
 
   sendControlMessage(msg: ControlMessage): void {
-    this.backend.sendControlMessage(msg);
+    this.client.sendControlMessage(msg);
   }
 
   subscribe(): AsyncIterableIterator<MediaPacket> {
@@ -188,13 +179,13 @@ export class ScrcpyV4Service extends EventEmitter {
     
     return {
       next: () => iterator.next(),
-      return: async (value?: any) => {
+      return: async (value?: MediaPacket) => {
         this.subscribers.delete(subscriber);
         subscriber.close();
         if (iterator.return) return await iterator.return(value);
         return { done: true, value };
       },
-      throw: async (e?: any) => {
+      throw: async (e?: Error) => {
         this.subscribers.delete(subscriber);
         subscriber.close();
         if (iterator.throw) return await iterator.throw(e);
@@ -220,59 +211,4 @@ export class ScrcpyV4Service extends EventEmitter {
 
   get currentState() { return this.state; }
   get currentMeta() { return this.meta; }
-}
-
-class MediaSubscriber implements AsyncIterable<MediaPacket> {
-  private queue: MediaPacket[] = [];
-  private resolveNext: ((value: IteratorResult<MediaPacket>) => void) | null = null;
-  private closed = false;
-
-  constructor(private maxQueue: number) {}
-
-  push(packet: MediaPacket): void {
-    if (this.closed) return;
-
-    if (this.resolveNext) {
-      const resolve = this.resolveNext;
-      this.resolveNext = null;
-      resolve({ done: false, value: packet });
-      return;
-    }
-
-    if (this.queue.length >= this.maxQueue) {
-      // Drop oldest non-config, non-session packet
-      const index = this.queue.findIndex(p => !p.config && p.kind !== MediaKind.SESSION);
-      if (index !== -1) {
-        this.queue.splice(index, 1);
-      } else {
-        this.queue.shift();
-      }
-    }
-    this.queue.push(packet);
-  }
-
-  close(): void {
-    this.closed = true;
-    if (this.resolveNext) {
-      const resolve = this.resolveNext;
-      this.resolveNext = null;
-      resolve({ done: true, value: undefined });
-    }
-  }
-
-  async *[Symbol.asyncIterator](): AsyncIterator<MediaPacket> {
-    while (true) {
-      if (this.queue.length > 0) {
-        yield this.queue.shift()!;
-        continue;
-      }
-      if (this.closed) return;
-      
-      const result = await new Promise<IteratorResult<MediaPacket>>((resolve) => {
-        this.resolveNext = resolve;
-      });
-      if (result.done) return;
-      yield result.value;
-    }
-  }
 }
