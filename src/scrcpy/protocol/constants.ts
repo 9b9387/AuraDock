@@ -1,22 +1,10 @@
 import { Buffer } from "node:buffer";
+import { VideoCodec, AudioCodec } from "./types";
 
 export const SESSION_PACKET_FLAG = 1n << 63n;
 export const CONFIG_PACKET_FLAG = 1n << 62n;
 export const KEY_FRAME_FLAG = 1n << 61n;
 export const PTS_MASK = (1n << 61n) - 1n;
-
-export enum VideoCodec {
-  H264 = "h264",
-  H265 = "h265",
-  AV1 = "av1",
-}
-
-export enum AudioCodec {
-  OPUS = "opus",
-  AAC = "aac",
-  FLAC = "flac",
-  RAW = "raw",
-}
 
 function getCodecId(name: string): number {
   const buf = Buffer.alloc(4, 0);

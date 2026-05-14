@@ -13,6 +13,10 @@ const scrcpyError = document.getElementById('scrcpy-error') as HTMLDivElement;
 
 const btnScreenshot = document.getElementById('btn-screenshot') as HTMLButtonElement;
 const btnRecord = document.getElementById('btn-record') as HTMLButtonElement;
+const btnStartAgent = document.getElementById('btn-start-agent') as HTMLButtonElement;
+const btnStopAgent = document.getElementById('btn-stop-agent') as HTMLButtonElement;
+const agentTaskInput = document.getElementById('agent-task-input') as HTMLTextAreaElement;
+const agentLog = document.getElementById('agent-log') as HTMLDivElement;
 
 let currentPort: MessagePort | null = null;
 let decoder: VideoDecoder | null = null;
@@ -22,6 +26,45 @@ let ctx: CanvasRenderingContext2D | null = null;
 
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
+
+function appendAgentLog(log: { type: 'thought' | 'action' | 'status', message: string }) {
+  const entry = document.createElement('div');
+  entry.className = `entry ${log.type}`;
+  entry.textContent = `[${log.type.toUpperCase()}] ${log.message}`;
+  agentLog.appendChild(entry);
+  agentLog.scrollTop = agentLog.scrollHeight;
+}
+
+btnStartAgent.onclick = () => {
+  const task = agentTaskInput.value.trim();
+  if (task) {
+    (window as any).adb.startAgent(task);
+    appendAgentLog({ type: 'status', message: `Starting task: ${task}` });
+    btnStartAgent.style.display = 'none';
+    btnStopAgent.style.display = 'inline-block';
+  }
+};
+
+btnStopAgent.onclick = () => {
+  (window as any).adb.stopAgent();
+  btnStartAgent.style.display = 'inline-block';
+  btnStopAgent.style.display = 'none';
+};
+
+(window as any).adb.onScreenshotRequest(() => {
+  if (!scrcpyCanvas) return;
+  const dataUrl = scrcpyCanvas.toDataURL('image/jpeg', 0.8);
+  const base64 = dataUrl.split(',')[1];
+  (window as any).adb.sendScreenshot(base64);
+});
+
+(window as any).adb.onAgentLog((log: any) => {
+  appendAgentLog(log);
+  if (log.message.includes('stopped') || log.message.includes('successfully') || log.message.includes('max turns') || log.message.includes('Error')) {
+    btnStartAgent.style.display = 'inline-block';
+    btnStopAgent.style.display = 'none';
+  }
+});
 
 function takeScreenshot() {
   if (!scrcpyCanvas) return;
@@ -74,7 +117,7 @@ btnRecord.onclick = toggleRecording;
 async function refreshDevices() {
   deviceList.innerHTML = '<li>Loading...</li>';
   try {
-    const devices = await window.adb.getDevices();
+    const devices = await (window as any).adb.getDevices();
     deviceList.innerHTML = '';
     if (devices.length === 0) {
       deviceList.innerHTML = '<li>No devices found</li>';
@@ -137,7 +180,7 @@ function startScrcpy(serial: string) {
   };
 
   window.addEventListener('message', onMessage);
-  window.adb.requestScrcpy(serial);
+  (window as any).adb.requestScrcpy(serial);
 }
 
 let framesReceived = 0;
@@ -265,6 +308,6 @@ refreshBtn.onclick = refreshDevices;
 refreshDevices();
 
 // Activate the port listener
-window.adb.onScrcpyPort((port) => {
+(window as any).adb.onScrcpyPort((port: any) => {
   console.log('[Renderer] Scrcpy port registered via callback', port);
 });

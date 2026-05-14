@@ -28,6 +28,7 @@
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@google/adk-devtools": "^1.1.0",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/fs-extra": "^11.0.4",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -41,7 +42,9 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@google/adk": "^1.1.0",
     "@u4/adbkit": "^5.1.7",
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "undici": "^8.3.0"
   }
 }

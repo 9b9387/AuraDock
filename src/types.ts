@@ -13,6 +13,10 @@ declare global {
       getDevices: () => Promise<AdbDeviceInfo[]>;
       requestScrcpy: (serial: string) => void;
       onScrcpyPort: (callback: (port: MessagePort) => void) => () => void;
+      onScreenshotRequest: (callback: () => void) => void;
+      sendScreenshot: (base64Data: string) => void;
+      onAgentLog: (callback: (log: any) => void) => void;
+      startAgent: (task: string) => void;
     };
   }
 }

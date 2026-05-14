@@ -13,4 +13,15 @@ contextBridge.exposeInMainWorld("adb", {
     ipcRenderer.on("adb:scrcpy-port", listener);
     return () => ipcRenderer.removeListener("adb:scrcpy-port", listener);
   },
+  onScreenshotRequest: (callback: () => void) => {
+    ipcRenderer.on("agent:request-screenshot", () => callback());
+  },
+  sendScreenshot: (base64Data: string) => {
+    ipcRenderer.send("agent:screenshot-data", base64Data);
+  },
+  onAgentLog: (callback: (log: any) => void) => {
+    ipcRenderer.on("agent:log", (_event, log) => callback(log));
+  },
+  startAgent: (task: string) => ipcRenderer.send("agent:start", task),
+  stopAgent: () => ipcRenderer.send("agent:stop"),
 });

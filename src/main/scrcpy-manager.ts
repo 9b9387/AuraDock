@@ -1,21 +1,37 @@
 import { ipcMain, MessageChannelMain } from 'electron';
-import adbkit, { Client, Device } from '@u4/adbkit';
-import { MediaStreamService, MediaKind, ControlMessageType } from '../scrcpy';
+import { MediaStreamService } from '../scrcpy/core/media-service';
+import { MediaKind } from '../scrcpy/core/media-subscriber';
+import { ControlMessageType } from '../scrcpy/protocol/types';
 
 import { AdbDeviceInfo } from '../types';
 
-const Adb = (adbkit as unknown as { default: typeof adbkit }).default || adbkit;
-
 export class ScrcpyManager {
-  private adb: Client = Adb.createClient();
-  private services: Map<string, MediaStreamService> = new Map();
+  private adb: any = null;
+  private services: Map<string, any> = new Map();
+
+  constructor() {
+    // Initialized asynchronously
+  }
+
+  private async ensureAdb() {
+    if (this.adb) return;
+    try {
+      // Use dynamic import for ESM-only @u4/adbkit
+      const { createClient } = await import('@u4/adbkit');
+      this.adb = createClient();
+    } catch (e) {
+      console.error('[ScrcpyManager] Failed to load adbkit:', e);
+    }
+  }
 
   async getDevices(): Promise<AdbDeviceInfo[]> {
+    await this.ensureAdb();
+    if (!this.adb) return [];
     try {
       const devices = await this.adb.listDevices();
-      return devices.map((d: Device) => ({
+      return devices.map((d: any) => ({
         id: d.id,
-        serial: d.id, // AdbDeviceInfo uses serial
+        serial: d.id, 
         type: d.type
       })) as unknown as AdbDeviceInfo[];
     } catch (e) {
@@ -25,6 +41,7 @@ export class ScrcpyManager {
   }
 
   async startScrcpy(serial: string, port: Electron.MessagePortMain) {
+    await this.ensureAdb();
     if (this.services.has(serial)) {
       this.services.get(serial)?.stop();
     }
@@ -33,7 +50,7 @@ export class ScrcpyManager {
       deviceSerial: serial,
       maxSize: 1024,
       video: true,
-      audio: false, // Renderer doesn't handle audio yet
+      audio: false, 
       control: true,
     });
 
@@ -76,23 +93,16 @@ export class ScrcpyManager {
             screenHeight: msg.data.videoHeight,
             pressure: msg.data.pressure,
           });
-        } else if (msg.type === 'control-action') {
-          // Additional control actions can be handled here
         }
       });
       port.start();
 
-      // Bridge subscription to port
       (async () => {
         let packetCount = 0;
         try {
           for await (const packet of subscription) {
             if (packet.kind === MediaKind.VIDEO) {
               packetCount++;
-              if (packetCount % 100 === 0 || packet.config) {
-                console.log(`[Scrcpy Manager] Sending video packet #${packetCount}, size: ${packet.payload.length}, config: ${packet.config}, key: ${packet.keyFrame}`);
-              }
-              // Always send video data as a packet, including config (SPS/PPS)
               port.postMessage({ 
                 type: 'packet', 
                 data: packet.payload,
@@ -100,7 +110,6 @@ export class ScrcpyManager {
                 config: packet.config
               });
             } else if (packet.kind === MediaKind.SESSION) {
-              console.log(`[Scrcpy Manager] Sending session update: ${packet.width}x${packet.height}`);
               port.postMessage({ type: 'metadata', width: packet.width, height: packet.height });
             }
           }
@@ -117,6 +126,10 @@ export class ScrcpyManager {
         // Port might be closed
       }
     }
+  }
+
+  getService(serial: string): MediaStreamService | undefined {
+    return this.services.get(serial);
   }
 
   setupHandlers() {

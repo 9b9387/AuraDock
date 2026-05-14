@@ -1,8 +1,35 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
-import { existsSync, copySync } from 'fs-extra';
+import { VisionAgent } from './main/vision-agent';
+import { existsSync as existsSyncExtra, copySync } from 'fs-extra';
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
+
+// Load .env manually
+if (existsSync('.env')) {
+  const envContent = readFileSync('.env', 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split('=');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+      process.env[key.trim()] = value;
+    }
+  });
+}
+
+// Setup Proxy for ADK/GenAI fetch
+const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+if (proxyUrl) {
+  try {
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    setGlobalDispatcher(proxyAgent);
+    console.log(`[Main] Global proxy set to: ${proxyUrl}`);
+  } catch (e) {
+    console.error('[Main] Failed to set global proxy:', e);
+  }
+}
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -50,6 +77,10 @@ app.on('ready', () => {
   // Setup Scrcpy handlers once at startup
   scrcpyManager.setupHandlers();
 
+  // Initialize VisionAgent
+  const visionAgent = new VisionAgent();
+  console.log('[Main] VisionAgent initialized');
+
   createWindow();
 });
 
@@ -69,6 +100,3 @@ app.on('activate', () => {
     createWindow();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.

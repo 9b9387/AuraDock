@@ -9,7 +9,7 @@ import {
   DeviceMessage,
   FrameMeta,
   SessionPacket,
-} from "../protocol";
+} from "../protocol/index";
 import { MediaKind, MediaPacket, MediaSubscriber } from "./media-subscriber";
 
 export enum StreamState {

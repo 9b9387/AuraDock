@@ -2,21 +2,19 @@ import { Buffer } from "node:buffer";
 import * as net from "node:net";
 import { EventEmitter } from "node:events";
 import * as path from "node:path";
-import adbkit, { Client, Device } from "@u4/adbkit";
 import {
   AudioCodec,
   AUDIO_CODEC_IDS,
   ControlMessage,
-  parseDeviceMessage,
-  parseFrameHeader,
-  serializeControlMessage,
-  SessionPacket,
   VideoCodec,
   VIDEO_CODEC_IDS,
-} from "../protocol";
+} from "../protocol/index";
+// ... imports omitted for brevity
+import { parseDeviceMessage } from "../protocol/device";
+import { parseFrameHeader } from "../protocol/frame";
+import { serializeControlMessage } from "../protocol/control";
 import { StreamReader } from "./stream-reader";
-
-const Adb = (adbkit as unknown as { default: typeof adbkit }).default || adbkit;
+import { createClient } from "@u4/adbkit";
 
 export const SCRCPY_V4_VERSION = "4.0";
 const DEFAULT_SOCKET_NAME = "scrcpy_0000000a";
@@ -52,8 +50,9 @@ export interface DeviceClientOptions {
  */
 export class ScrcpyDeviceClient extends EventEmitter {
   private options: Required<DeviceClientOptions>;
-  private adb: Client = Adb.createClient();
-  private device: Device | null = null;
+  private adb: any = createClient();
+  private device: any = null;
+
   private serverStream: net.Socket | null = null;
   private videoSocket: net.Socket | null = null;
   private audioSocket: net.Socket | null = null;
