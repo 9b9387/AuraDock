@@ -1,13 +1,29 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { scrcpyManager } from './main/scrcpy-manager';
+import fs from 'fs-extra';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
 
+const ensureAssets = () => {
+  const assetsSrc = path.join(__dirname, '../../src/scrcpy/assets');
+  const assetsDest = path.join(__dirname, 'assets');
+  if (fs.existsSync(assetsSrc)) {
+    fs.copySync(assetsSrc, assetsDest, { overwrite: true });
+  }
+};
+
 const createWindow = () => {
+  // Ensure scrcpy assets are available in the build directory
+  ensureAssets();
+
+  // Setup Scrcpy handlers
+  scrcpyManager.setupHandlers();
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 800,

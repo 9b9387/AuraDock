@@ -1,33 +1,214 @@
-/**
- * This file will automatically be loaded by vite and run in the "renderer" context.
- * To learn more about the differences between the "main" and the "renderer" context in
- * Electron, visit:
- *
- * https://electronjs.org/docs/tutorial/process-model
- *
- * By default, Node.js integration in this file is disabled. When enabling Node.js integration
- * in a renderer process, please be aware of potential security implications. You can read
- * more about security risks here:
- *
- * https://electronjs.org/docs/tutorial/security
- *
- * To enable Node.js integration in this file, open up `main.ts` and enable the `nodeIntegration`
- * flag:
- *
- * ```
- *  // Create the browser window.
- *  mainWindow = new BrowserWindow({
- *    width: 800,
- *    height: 600,
- *    webPreferences: {
- *      nodeIntegration: true
- *    }
- *  });
- * ```
- */
-
 import './index.css';
+import type { AdbDeviceInfo } from './types';
 
-console.log(
-  '👋 This message is being logged by "renderer.ts", included via Vite',
-);
+const deviceListContainer = document.getElementById('device-list-container') as HTMLDivElement;
+const deviceList = document.getElementById('device-list') as HTMLUListElement;
+const refreshBtn = document.getElementById('refresh-devices') as HTMLButtonElement;
+
+const scrcpyContainer = document.getElementById('scrcpy-container') as HTMLDivElement;
+const scrcpyCanvas = document.getElementById('scrcpy-canvas') as HTMLCanvasElement;
+const backBtn = document.getElementById('back-to-list') as HTMLButtonElement;
+const scrcpyStatus = document.getElementById('scrcpy-status') as HTMLSpanElement;
+const scrcpyError = document.getElementById('scrcpy-error') as HTMLDivElement;
+
+let currentPort: MessagePort | null = null;
+let decoder: VideoDecoder | null = null;
+let videoWidth = 0;
+let videoHeight = 0;
+let ctx: CanvasRenderingContext2D | null = null;
+
+async function refreshDevices() {
+  deviceList.innerHTML = '<li>Loading...</li>';
+  try {
+    const devices = await window.adb.getDevices();
+    deviceList.innerHTML = '';
+    if (devices.length === 0) {
+      deviceList.innerHTML = '<li>No devices found</li>';
+      return;
+    }
+    devices.forEach((device: AdbDeviceInfo) => {
+      const li = document.createElement('li');
+      const serial = (device as any).id || (device as any).serial;
+      li.textContent = `${device.model || serial} (${serial})`;
+      const connectBtn = document.createElement('button');
+      connectBtn.textContent = 'Connect';
+      connectBtn.onclick = () => startScrcpy(serial);
+      li.appendChild(connectBtn);
+      deviceList.appendChild(li);
+    });
+  } catch (error) {
+    deviceList.innerHTML = `<li>Error: ${error}</li>`;
+  }
+}
+
+function startScrcpy(serial: string) {
+  console.log('[Renderer] Requesting scrcpy for:', serial);
+  deviceListContainer.style.display = 'none';
+  scrcpyContainer.style.display = 'block';
+  scrcpyStatus.textContent = 'Connecting...';
+  scrcpyError.style.display = 'none';
+
+  ctx = scrcpyCanvas.getContext('2d');
+
+  const onMessage = (event: MessageEvent) => {
+    if (event.data.type === 'scrcpy-port' && event.ports[0]) {
+      window.removeEventListener('message', onMessage);
+      currentPort = event.ports[0];
+      console.log('[Renderer] Received scrcpy port');
+
+      currentPort.onmessage = (ev) => {
+        const message = ev.data;
+        if (message.type === 'metadata') {
+          console.log('[Renderer] Received metadata:', message);
+          if (message.width && message.height) {
+            videoWidth = message.width;
+            videoHeight = message.height;
+            scrcpyCanvas.width = videoWidth;
+            scrcpyCanvas.height = videoHeight;
+            initDecoder();
+            scrcpyStatus.textContent = `Streaming (${videoWidth}x${videoHeight})`;
+          }
+        } else if (message.type === 'packet') {
+          if (!decoder) initDecoder();
+          decodePacket(new Uint8Array(message.data), !!message.keyFrame, !!message.config);
+        } else if (message.type === 'error') {
+          console.error('[Renderer] Port error:', message.error);
+          scrcpyStatus.textContent = 'Error';
+          scrcpyError.textContent = message.error;
+          scrcpyError.style.display = 'block';
+        }
+      };
+      currentPort.start();
+    }
+  };
+
+  window.addEventListener('message', onMessage);
+  window.adb.requestScrcpy(serial);
+}
+
+let framesReceived = 0;
+let framesDecoded = 0;
+let hasDecodedKeyFrame = false;
+let pendingConfig: Uint8Array | null = null;
+
+function initDecoder() {
+  if (decoder) {
+    if (decoder.state === 'configured') return;
+    decoder.close();
+  }
+
+  console.log('[Renderer] Initializing VideoDecoder');
+  hasDecodedKeyFrame = false;
+  decoder = new VideoDecoder({
+    output: (frame) => {
+      framesDecoded++;
+      if (framesDecoded === 1) console.log('[Renderer] First frame decoded!');
+      if (framesDecoded % 60 === 0) console.log(`[Renderer] Frames decoded: ${framesDecoded}`);
+      
+      if (videoWidth === 0 || scrcpyCanvas.width !== frame.displayWidth) {
+        videoWidth = frame.displayWidth;
+        videoHeight = frame.displayHeight;
+        scrcpyCanvas.width = videoWidth;
+        scrcpyCanvas.height = videoHeight;
+      }
+      ctx?.drawImage(frame, 0, 0, scrcpyCanvas.width, scrcpyCanvas.height);
+      frame.close();
+    },
+    error: (e) => {
+      console.error('[Renderer] WebCodecs Error:', e);
+      scrcpyStatus.textContent = 'Decode Error';
+    },
+  });
+
+  const decoderConfig: VideoDecoderConfig = {
+    codec: 'avc1.42E01E', // Baseline profile
+    optimizeForLatency: true,
+  };
+
+  decoder.configure(decoderConfig);
+}
+
+function decodePacket(data: Uint8Array, isKeyFrame: boolean, isConfig: boolean) {
+  if (!decoder || decoder.state !== 'configured') return;
+  
+  if (isConfig) {
+    console.log('[Renderer] Storing config packet (SPS/PPS)');
+    pendingConfig = data;
+    return;
+  }
+
+  if (!hasDecodedKeyFrame && !isKeyFrame) {
+    // Skip delta frames until we get a keyframe
+    return;
+  }
+
+  framesReceived++;
+  
+  let buffer = data;
+  if (isKeyFrame && pendingConfig) {
+    console.log('[Renderer] Prepending pending config to keyframe');
+    const combined = new Uint8Array(pendingConfig.length + data.length);
+    combined.set(pendingConfig);
+    combined.set(data, pendingConfig.length);
+    buffer = combined;
+  }
+
+  const chunk = new EncodedVideoChunk({
+    type: isKeyFrame ? 'key' : 'delta',
+    timestamp: Math.floor(performance.now() * 1000),
+    data: buffer,
+  });
+  
+  try {
+    decoder.decode(chunk);
+    if (isKeyFrame) hasDecodedKeyFrame = true;
+  } catch (e) {
+    console.error('[Renderer] Decode call failed:', e);
+  }
+}
+
+function handleMouseEvent(e: MouseEvent, action: number) {
+  if (!currentPort || videoWidth === 0) return;
+
+  const rect = scrcpyCanvas.getBoundingClientRect();
+  const x = Math.floor(((e.clientX - rect.left) / rect.width) * videoWidth);
+  const y = Math.floor(((e.clientY - rect.top) / rect.height) * videoHeight);
+
+  currentPort.postMessage({
+    type: 'control',
+    data: {
+      action,
+      pointerX: x,
+      pointerY: y,
+      videoWidth,
+      videoHeight,
+      pressure: action === 1 ? 0 : 1, // action 1 is UP
+    }
+  });
+}
+
+scrcpyCanvas.onmousedown = (e) => handleMouseEvent(e, 0); // DOWN
+scrcpyCanvas.onmousemove = (e) => {
+  if (e.buttons > 0) handleMouseEvent(e, 2); // MOVE
+};
+scrcpyCanvas.onmouseup = (e) => handleMouseEvent(e, 1); // UP
+
+backBtn.onclick = () => {
+  if (currentPort) {
+    currentPort.close();
+    currentPort = null;
+  }
+  if (decoder) {
+    decoder.close();
+    decoder = null;
+  }
+  scrcpyContainer.style.display = 'none';
+  deviceListContainer.style.display = 'block';
+  videoWidth = 0;
+};
+
+refreshBtn.onclick = refreshDevices;
+refreshDevices();
+
+// Activate the port listener
+window.adb.onScrcpyPort(() => {});

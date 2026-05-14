@@ -6,8 +6,20 @@
 
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <h1>Scrcpy Electron</h1>
+    <div id="device-list-container">
+      <h2>Connected Devices</h2>
+      <button id="refresh-devices">Refresh</button>
+      <ul id="device-list"></ul>
+    </div>
+    <div id="scrcpy-container" style="display: none;">
+      <div id="scrcpy-header">
+        <button id="back-to-list">Back</button>
+        <span id="scrcpy-status">Connecting...</span>
+      </div>
+      <div id="scrcpy-error" style="color: #ff4444; margin: 10px; display: none;"></div>
+      <canvas id="scrcpy-canvas"></canvas>
+    </div>
     <script type="module" src="/src/renderer.ts"></script>
   </body>
 </html>
