@@ -45,16 +45,34 @@ export class ScrcpyManager {
       this.services.get(serial)?.stop();
     }
 
+    // Cleanup old processes on device to prevent "Connection refused"
+    try {
+      const { exec } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const execAsync = promisify(exec);
+      // Kill processes that might be holding the socket
+      await execAsync(`adb -s ${serial} shell "pkill -f scrcpy-server"`).catch(() => {});
+      console.log(`[Scrcpy Manager] Cleaned up old processes for ${serial}`);
+    } catch (e) {
+      console.warn(`[Scrcpy Manager] Failed to cleanup processes for ${serial}:`, e);
+    }
+
     // Explicitly point to the jar in node_modules
     const serverJarPath = path.join(process.cwd(), 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
 
+    // Generate a stable scid
+    const scid = 0x0000000a;
+    console.log(`[Scrcpy Manager] Starting service for ${serial} with scid: 0x${scid.toString(16)}`);
+
     const service = new ScrcpyStreamService({
       deviceSerial: serial,
+      scid,
       maxSize: 1024,
       video: true,
       audio: false, 
       control: true,
       serverJarPath,
+      connectionTimeoutMs: 15000, // Increase timeout for slow devices
     });
 
 
