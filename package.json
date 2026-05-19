@@ -42,6 +42,7 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@9b9387/android-stream-scrcpy": "^0.1.0",
     "@google/adk": "^1.1.0",
     "@u4/adbkit": "^5.1.7",
     "electron-squirrel-startup": "^1.0.1",

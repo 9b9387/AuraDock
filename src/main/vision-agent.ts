@@ -1,7 +1,12 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { z } from 'zod';
 import { scrcpyManager } from './scrcpy-manager';
-import { ControlMessageType } from '../scrcpy/protocol/types';
+import { ControlMessageType } from '@9b9387/android-stream-scrcpy';
+import * as fs from 'node:fs/promises';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execPromise = promisify(exec);
 
 export class VisionAgent {
   private agent: any = null;
@@ -61,7 +66,7 @@ export class VisionAgent {
             screenHeight: meta.height,
             pressure: 0,
           });
-          return { status: 'success', message: `Tapped at ${x}, ${y}` };
+          return { status: 'success' };
         },
       });
 
@@ -175,19 +180,123 @@ export class VisionAgent {
         },
       });
 
+      const readFileTool = new FunctionTool({
+        name: 'read_file',
+        description: 'Read the contents of a local file.',
+        parameters: z.object({
+          path: z.string().describe('The path to the file to read.'),
+        }),
+        execute: async ({ path }) => {
+          this.log('action', `Reading file: ${path}`);
+          try {
+            const content = await fs.readFile(path, 'utf-8');
+            return { status: 'success', content };
+          } catch (e: any) {
+            return { status: 'error', message: e.message };
+          }
+        },
+      });
+
+      const writeFileTool = new FunctionTool({
+        name: 'write_file',
+        description: 'Write content to a local file.',
+        parameters: z.object({
+          path: z.string().describe('The path to the file to write.'),
+          content: z.string().describe('The content to write to the file.'),
+        }),
+        execute: async ({ path, content }) => {
+          this.log('action', `Writing file: ${path}`);
+          try {
+            await fs.writeFile(path, content, 'utf-8');
+            return { status: 'success' };
+          } catch (e: any) {
+            return { status: 'error', message: e.message };
+          }
+        },
+      });
+
+      const bashTool = new FunctionTool({
+        name: 'run_bash',
+        description: 'Execute a bash command and return its output.',
+        parameters: z.object({
+          command: z.string().describe('The bash command to execute.'),
+        }),
+        execute: async ({ command }) => {
+          this.log('action', `Executing bash: ${command}`);
+          try {
+            const { stdout, stderr } = await execPromise(command);
+            return { status: 'success', stdout, stderr };
+          } catch (e: any) {
+            return { status: 'error', message: e.message, stderr: e.stderr };
+          }
+        },
+      });
+
+      const adbPushFileTool = new FunctionTool({
+        name: 'adb_push_file',
+        description: 'Push a local file to the Android device using ADB. If the file is an image (.jpg, .png, etc.), it will be pushed to the gallery (DCIM) and a media scan will be triggered.',
+        parameters: z.object({
+          localPath: z.string().describe('The local path of the file to push.'),
+          remotePath: z.string().describe('The destination path on the device.'),
+        }),
+        execute: async ({ localPath, remotePath }) => {
+          this.log('action', `ADB Pushing file: ${localPath} to ${remotePath}`);
+          const serial = this.currentSerial;
+          if (!serial) return { status: 'error', message: 'No active device' };
+
+          try {
+            const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(localPath);
+            const finalRemotePath = isImage ? `/sdcard/DCIM/Camera/${path.basename(localPath)}` : remotePath;
+
+            await execPromise(`adb -s ${serial} push "${localPath}" "${finalRemotePath}"`);
+            
+            if (isImage) {
+              await execPromise(`adb -s ${serial} shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://${finalRemotePath}"`);
+              return { status: 'success', message: `Image pushed to gallery: ${finalRemotePath}` };
+            }
+            
+            return { status: 'success', message: `File pushed to: ${finalRemotePath}` };
+          } catch (e: any) {
+            return { status: 'error', message: e.message };
+          }
+        },
+      });
+
+      const adbPushImageTool = new FunctionTool({
+        name: 'adb_push_image',
+        description: 'Push a local image file to the device\'s DCIM/Camera directory and trigger a media scan to make it appear in the gallery.',
+        parameters: z.object({
+          localPath: z.string().describe('The local path of the image file to push.'),
+        }),
+        execute: async ({ localPath }) => {
+          this.log('action', `ADB Pushing image to gallery: ${localPath}`);
+          const serial = this.currentSerial;
+          if (!serial) return { status: 'error', message: 'No active device' };
+
+          try {
+            const filename = path.basename(localPath);
+            const remotePath = `/sdcard/DCIM/Camera/${filename}`;
+            
+            await execPromise(`adb -s ${serial} push "${localPath}" "${remotePath}"`);
+            await execPromise(`adb -s ${serial} shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://${remotePath}"`);
+            
+            return { status: 'success', message: `Image successfully added to gallery: ${remotePath}` };
+          } catch (e: any) {
+            return { status: 'error', message: e.message };
+          }
+        },
+      });
+
       this.agent = new LlmAgent({
         name: 'VisionMobileAgent',
         model: 'gemini-3-flash-preview',
-        instruction: `You are a precise autonomous mobile agent.
-OPERATIONAL RULES:
-1. ONE ACTION AT A TIME: For each cycle, only perform ONE tool call (e.g., one tap). DO NOT chain multiple actions.
-2. DETAILED OBSERVATION: Before acting, describe the screen state. If the task involves matching or selecting objects, list the objects you see, their labels, and their exact coordinates.
-3. VERIFICATION: After an action, wait for the next screenshot to verify success.
-4. COORDINATES: Ensure all coordinates are within the provided Screen Resolution bounds.
-5. GAMEPLAY: For matching games, identify 'unblocked' tiles (tiles with no other tiles overlapping them).
-
-PLAN -> PERCEIVE (list objects) -> DECIDE (one tool) -> ACT.`,
-        tools: [tapTool, swipeTool, inputTextTool, keyEventTool, waitTool],
+        instruction: `You are a strategic autonomous Vision Agent.
+OPERATIONAL ARCHITECTURE:
+1. PLANNING: Create and maintain a multi-step plan.
+2. STATE TRACKING: Track your current step, progress, and total task status.
+3. DECIDING: Perform ONE action to move closer to finishing the CURRENT step.
+4. VERIFYING & MANAGING: Use results to update your plan and current step state.`,
+        tools: [tapTool, swipeTool, inputTextTool, keyEventTool, waitTool, readFileTool, writeFileTool, bashTool, adbPushFileTool, adbPushImageTool],
       });
       this.log('status', 'Agent successfully initialized.');
     } catch (e: any) {
@@ -273,7 +382,7 @@ PLAN -> PERCEIVE (list objects) -> DECIDE (one tool) -> ACT.`,
   }
 
   private async runLoop(task: string) {
-    const { InMemoryRunner, isFinalResponse } = await import('@google/adk');
+    const { InMemoryRunner, isFinalResponse, toStructuredEvents, EventType } = await import('@google/adk');
     
     const runner = new InMemoryRunner({
       agent: this.agent,
@@ -283,80 +392,182 @@ PLAN -> PERCEIVE (list objects) -> DECIDE (one tool) -> ACT.`,
     const sessionId = 'vision-session-' + Date.now();
     const userId = 'user';
 
-    await runner.sessionService.createSession({
-      appName: 'OmniAgent',
-      userId,
-      sessionId,
-    });
+    await runner.sessionService.createSession({ appName: 'OmniAgent', userId, sessionId });
 
-    let turn = 0;
-    const maxTurns = 50; // Games might take more turns
+    let cycleCount = 0;
+    const maxCycles = 50;
+    const actionHistory: string[] = [];
 
-    this.log('thought', `Starting session for task: ${task}`);
+    const meta = this.getService().currentMeta;
+    const resolutionInfo = meta ? `Screen Resolution: ${meta.width}x${meta.height}. ` : '';
 
-    while (turn < maxTurns && this.isRunning) {
-      turn++;
-      this.log('status', `Cycle ${turn} - Capturing screen...`);
+    // --- PHASE 0: INITIAL PLANNING (TEXT ONLY) ---
+    this.log('status', 'Phase 0: Initial Planning');
+    let currentPlan = '';
+    let stepContext = 'Initializing task...'; // VARIABLE FOR STEP MANAGEMENT
 
-      const base64Image = await this.captureScreenshot();
+    const planningMessage: any = {
+      role: 'user',
+      parts: [
+        { text: `Task: ${task}.
+Analyze this task and provide:
+1. A high-level 3-5 step PLAN.
+2. The INITIAL STEP you will attempt.
+Do not call tools.` }
+      ]
+    };
+
+    try {
+      for await (const event of runner.runAsync({ userId, sessionId, newMessage: planningMessage })) {
+        if (isFinalResponse(event)) {
+          currentPlan = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
+          stepContext = `Starting Plan. Current Step: Determining first move.`;
+        }
+      }
+    } catch (e: any) {
+      this.log('status', `Planning Error: ${e.message}`);
+      return;
+    }
+    this.log('thought', `Plan: ${currentPlan}`);
+
+    // --- MAIN LOOP ---
+    while (cycleCount < maxCycles && this.isRunning) {
+      cycleCount++;
+      
+      const historySummary = actionHistory.length > 0 
+        ? `Action History:\n${actionHistory.join('\n')}` 
+        : 'Action History: No actions yet.';
+
+      // --- PHASE 1: DECISION (ACT) ---
+      this.log('status', `Cycle ${cycleCount} - Decision Phase`);
+      const base64Decision = await this.captureScreenshot();
       if (!this.isRunning) break;
 
-      const service = this.getService();
-      const meta = service.currentMeta;
-      const resolutionInfo = meta ? `Screen Resolution: ${meta.width}x${meta.height}. ` : '';
-      
-      const newMessage: any = {
+      const decisionMessage: any = {
         role: 'user',
         parts: [
-          { text: `${resolutionInfo}Task: ${task}.
-Analyze the image carefully.
-IMPORTANT: You MUST ONLY perform ONE action (one tool call) in this turn.
-After your action, I will provide a new screenshot.
-If you have matched 3 pairs, or the task is finished, say "Task is complete".` },
-          { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+          { text: `TASK: ${task}
+FULL PLAN: ${currentPlan}
+CURRENT STEP CONTEXT: ${stepContext}
+${historySummary}
+
+Observe the screenshot and perform the NEXT SINGLE ACTION for the CURRENT STEP.
+If the entire task is finished, say "Task is complete".` },
+          { inlineData: { mimeType: 'image/jpeg', data: base64Decision } }
         ]
       };
 
-      this.log('status', 'Thinking...');
-      let finalResponseText = '';
+      let actionTaken = false;
+      let decisionText = '';
+      let toolCallDescription = '';
+
       try {
-        for await (const event of runner.runAsync({
-          userId,
-          sessionId,
-          newMessage,
-        })) {
+        for await (const event of runner.runAsync({ userId, sessionId, newMessage: decisionMessage })) {
           if (!this.isRunning) break;
-          const e = event as any;
-          if (e.errorCode) {
-            this.log('status', `Agent Error [${e.errorCode}]: ${e.errorMessage}`);
-          }
           if (isFinalResponse(event)) {
-            finalResponseText = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
+            decisionText = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
           }
+          const structured = toStructuredEvents(event);
+          for (const se of structured) {
+            if (se.type === EventType.TOOL_CALL) {
+              toolCallDescription = `${se.call.name}(${JSON.stringify(se.call.args)})`;
+            }
+            if (se.type === EventType.TOOL_RESULT) {
+              actionTaken = true;
+            }
+          }
+          if (actionTaken) break;
         }
       } catch (e: any) {
-        this.log('status', `Error during cycle: ${e.message}`);
-        console.error('Cycle error:', e);
+        this.log('status', `Decision Error: ${e.message}`);
         break;
       }
 
       if (!this.isRunning) break;
+      if (decisionText) this.log('thought', `Decision: ${decisionText}`);
 
-      if (finalResponseText) {
-        this.log('thought', finalResponseText);
-      }
-
-      if (finalResponseText.toLowerCase().includes('task is complete') || finalResponseText.toLowerCase().includes('task complete')) {
+      if (decisionText.toLowerCase().includes('task is complete')) {
         this.log('status', 'Task finished successfully!');
         break;
       }
 
-      // Wait for UI to update before next cycle
-      await new Promise(r => setTimeout(r, 1500));
+      // --- PHASE 2: VERIFICATION (VISUAL) ---
+      let verificationResult = 'No action performed.';
+      if (actionTaken) {
+        this.log('status', `Cycle ${cycleCount} - Verification Phase`);
+        await new Promise(r => setTimeout(r, 2000));
+        const base64Verify = await this.captureScreenshot();
+        if (!this.isRunning) break;
+
+        const verifyMessage: any = {
+          role: 'user',
+          parts: [
+            { text: `Action performed: ${toolCallDescription}.
+Compare screen with previous state. Is this SUCCESS or FAILURE? Describe visual changes.` },
+            { inlineData: { mimeType: 'image/jpeg', data: base64Verify } }
+          ]
+        };
+
+        try {
+          for await (const event of runner.runAsync({ userId, sessionId, newMessage: verifyMessage })) {
+            if (!this.isRunning) break;
+            if (isFinalResponse(event)) {
+              verificationResult = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
+            }
+          }
+        } catch (e: any) {
+          this.log('status', `Verification Error: ${e.message}`);
+        }
+        this.log('thought', `Verify Result: ${verificationResult}`);
+      }
+
+      // --- PHASE 3: STATE MANAGEMENT & REPLANNING (TEXT ONLY) ---
+      if (this.isRunning) {
+        this.log('status', `Cycle ${cycleCount} - State Manager Phase`);
+        const stateManagerMessage: any = {
+          role: 'user',
+          parts: [
+            { text: `TASK: ${task}
+FULL PLAN: ${currentPlan}
+PREVIOUS STEP CONTEXT: ${stepContext}
+LAST ACTION: ${toolCallDescription}
+VERIFICATION RESULT: ${verificationResult}
+
+As the STATE MANAGER, update the execution status:
+1. Is the CURRENT STEP complete?
+2. What is the NEW "CURRENT STEP CONTEXT" for the next turn? (Be specific)
+3. Do we need to REPLAN the "FULL PLAN"?
+4. Is the TOTAL TASK complete?
+
+Respond with the updated FULL PLAN and NEW STEP CONTEXT. Do not use tools.` }
+          ]
+        };
+
+        let managerResponse = '';
+        try {
+          for await (const event of runner.runAsync({ userId, sessionId, newMessage: stateManagerMessage })) {
+            if (!this.isRunning) break;
+            if (isFinalResponse(event)) {
+              managerResponse = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
+            }
+          }
+        } catch (e: any) {
+          this.log('status', `State Manager Error: ${e.message}`);
+        }
+
+        if (managerResponse) {
+          this.log('thought', `State Update: ${managerResponse}`);
+          // Simplified extraction logic: treat the whole response as the updated plan and context
+          stepContext = managerResponse; 
+          actionHistory.push(`Turn ${cycleCount}: ${toolCallDescription} -> Result: ${verificationResult}`);
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 1000));
     }
 
-    if (turn >= maxTurns && this.isRunning) {
-      this.log('status', 'Reached max turns without completion.');
+    if (cycleCount >= maxCycles && this.isRunning) {
+      this.log('status', 'Reached max cycles.');
     }
   }
 }

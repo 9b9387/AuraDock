@@ -1,13 +1,12 @@
 import { ipcMain, MessageChannelMain } from 'electron';
-import { MediaStreamService } from '../scrcpy/core/media-service';
-import { MediaKind } from '../scrcpy/core/media-subscriber';
-import { ControlMessageType } from '../scrcpy/protocol/types';
+import path from 'node:path';
+import { ScrcpyStreamService, MediaKind, ControlMessageType } from '@9b9387/android-stream-scrcpy';
 
 import { AdbDeviceInfo } from '../types';
 
 export class ScrcpyManager {
   private adb: any = null;
-  private services: Map<string, any> = new Map();
+  private services: Map<string, ScrcpyStreamService> = new Map();
 
   constructor() {
     // Initialized asynchronously
@@ -46,12 +45,16 @@ export class ScrcpyManager {
       this.services.get(serial)?.stop();
     }
 
-    const service = new MediaStreamService({
+    // Explicitly point to the jar in node_modules
+    const serverJarPath = path.join(process.cwd(), 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+
+    const service = new ScrcpyStreamService({
       deviceSerial: serial,
       maxSize: 1024,
       video: true,
       audio: false, 
       control: true,
+      serverJarPath,
     });
 
 
@@ -98,11 +101,9 @@ export class ScrcpyManager {
       port.start();
 
       (async () => {
-        let packetCount = 0;
         try {
           for await (const packet of subscription) {
             if (packet.kind === MediaKind.VIDEO) {
-              packetCount++;
               port.postMessage({ 
                 type: 'packet', 
                 data: packet.payload,
@@ -128,7 +129,7 @@ export class ScrcpyManager {
     }
   }
 
-  getService(serial: string): MediaStreamService | undefined {
+  getService(serial: string): ScrcpyStreamService | undefined {
     return this.services.get(serial);
   }
 

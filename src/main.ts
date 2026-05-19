@@ -4,7 +4,6 @@ import { readFileSync, existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
 import { VisionAgent } from './main/vision-agent';
-import { existsSync as existsSyncExtra, copySync } from 'fs-extra';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
 // Load .env manually
@@ -36,14 +35,6 @@ if (started) {
   app.quit();
 }
 
-const ensureAssets = () => {
-  const assetsSrc = path.join(__dirname, '../../src/scrcpy/assets');
-  const assetsDest = path.join(__dirname, 'assets');
-  if (existsSync(assetsSrc)) {
-    copySync(assetsSrc, assetsDest, { overwrite: true });
-  }
-};
-
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -71,9 +62,6 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
-  // Ensure scrcpy assets are available in the build directory
-  ensureAssets();
-
   // Setup Scrcpy handlers once at startup
   scrcpyManager.setupHandlers();
 
