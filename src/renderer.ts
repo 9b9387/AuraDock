@@ -1,5 +1,10 @@
 import './index.css';
 import type { AdbDeviceInfo } from './types';
+import { ScrcpyAudioQueue } from './renderer/services/scrcpy-audio-queue';
+import { AudioMixer } from './renderer/services/audio-mixer';
+import { GeminiVoicePlayer } from './renderer/services/gemini-voice-player';
+import { VideoFramePush } from './renderer/services/video-frame-push';
+import { GeminiLiveService } from './renderer/services/gemini-live-service';
 
 const deviceListContainer = document.getElementById('device-list-container') as HTMLDivElement;
 const deviceList = document.getElementById('device-list') as HTMLUListElement;
@@ -168,6 +173,8 @@ function startScrcpy(serial: string) {
         } else if (message.type === 'packet') {
           if (!decoder) initDecoder();
           decodePacket(new Uint8Array(message.data), !!message.keyFrame, !!message.config);
+        } else if (message.type === 'audio-packet') {
+          scrcpyAudioQueue.write(new Uint8Array(message.data));
         } else if (message.type === 'error') {
           console.error('[Renderer] Port error:', message.error);
           scrcpyStatus.textContent = 'Error';
@@ -291,6 +298,8 @@ scrcpyCanvas.onmousemove = (e) => {
 scrcpyCanvas.onmouseup = (e) => handleMouseEvent(e, 1); // UP
 
 backBtn.onclick = () => {
+  geminiLiveService.disconnect();
+  
   if (currentPort) {
     currentPort.close();
     currentPort = null;
@@ -306,6 +315,109 @@ backBtn.onclick = () => {
 
 refreshBtn.onclick = refreshDevices;
 refreshDevices();
+
+// DOM elements for Gemini Live Call
+const btnStartLive = document.getElementById('btn-start-live') as HTMLButtonElement;
+const btnStopLive = document.getElementById('btn-stop-live') as HTMLButtonElement;
+const geminiLiveLog = document.getElementById('gemini-live-log') as HTMLDivElement;
+
+function appendLiveLog(log: { type: 'thought' | 'action' | 'status', message: string }) {
+  const entry = document.createElement('div');
+  entry.className = `entry ${log.type}`;
+  entry.textContent = `[${log.type.toUpperCase()}] ${log.message}`;
+  geminiLiveLog.appendChild(entry);
+  geminiLiveLog.scrollTop = geminiLiveLog.scrollHeight;
+}
+
+// Instantiate services
+const scrcpyAudioQueue = new ScrcpyAudioQueue();
+const audioMixer = new AudioMixer(scrcpyAudioQueue);
+const geminiVoicePlayer = new GeminiVoicePlayer();
+const videoFramePush = new VideoFramePush(scrcpyCanvas);
+const geminiLiveService = new GeminiLiveService();
+
+// Wire GeminiLiveService callbacks
+geminiLiveService.onStatusChanged = (status) => {
+  appendLiveLog({ type: 'status', message: `Live Call Status: ${status.toUpperCase()}` });
+  if (status === 'connected') {
+    btnStartLive.style.display = 'none';
+    btnStopLive.style.display = 'inline-block';
+    
+    // Start Audio mixing and sending
+    // Following ADK best practices, we send raw binary PCM buffers directly
+    // to eliminate Base64 encoding CPU overhead and reduce bandwidth by ~33%
+    audioMixer.start((pcmData) => {
+      geminiLiveService.sendAudioBuffer(pcmData);
+    }).catch(err => {
+      appendLiveLog({ type: 'status', message: `Audio start error: ${err.message}` });
+      geminiLiveService.disconnect();
+    });
+
+    // Start 1 FPS screen push
+    videoFramePush.start((jpegBase64) => {
+      geminiLiveService.sendImageFrame(jpegBase64);
+    });
+
+    // Start Voice output player
+    // Share AudioContext of AudioMixer to play voice back-to-back perfectly!
+    const sharedCtx = (audioMixer as any).audioCtx;
+    geminiVoicePlayer.start(sharedCtx);
+  } else if (status === 'disconnected' || status === 'error') {
+    btnStartLive.style.display = 'inline-block';
+    btnStopLive.style.display = 'none';
+
+    audioMixer.stop();
+    videoFramePush.stop();
+    geminiVoicePlayer.stop();
+    scrcpyAudioQueue.clear();
+  }
+};
+
+geminiLiveService.onAudioReceived = (pcmBuffer) => {
+  geminiVoicePlayer.playRawPCM(pcmBuffer);
+};
+
+geminiLiveService.onTextReceived = (text) => {
+  appendLiveLog({ type: 'thought', message: `Gemini: ${text}` });
+};
+
+geminiLiveService.onInterrupted = () => {
+  geminiVoicePlayer.interrupt();
+  appendLiveLog({ type: 'status', message: '[Interrupted: AI voice cutoff]' });
+};
+
+geminiLiveService.onLogMessage = (type, message) => {
+  appendLiveLog({ type, message });
+};
+
+// Helper: Convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
+// Button actions
+btnStartLive.onclick = async () => {
+  try {
+    const apiKey = await (window as any).adb.getGeminiApiKey();
+    if (!apiKey) {
+      appendLiveLog({ type: 'status', message: 'Missing GEMINI_API_KEY in environment/.env' });
+      return;
+    }
+    geminiLiveService.connect(apiKey);
+  } catch (err: any) {
+    appendLiveLog({ type: 'status', message: `Failed to fetch API key: ${err.message}` });
+  }
+};
+
+btnStopLive.onclick = () => {
+  geminiLiveService.disconnect();
+};
 
 // Activate the port listener
 (window as any).adb.onScrcpyPort((port: any) => {

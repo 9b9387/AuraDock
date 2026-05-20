@@ -69,7 +69,8 @@ export class ScrcpyManager {
       scid,
       maxSize: 1024,
       video: true,
-      audio: false, 
+      audio: true, 
+      audioCodec: 'raw' as any,
       control: true,
       serverJarPath,
       connectionTimeoutMs: 15000, // Increase timeout for slow devices
@@ -127,6 +128,11 @@ export class ScrcpyManager {
                 data: packet.payload,
                 keyFrame: packet.keyFrame,
                 config: packet.config
+              });
+            } else if (packet.kind === MediaKind.AUDIO) {
+              port.postMessage({
+                type: 'audio-packet',
+                data: packet.payload
               });
             } else if (packet.kind === MediaKind.SESSION) {
               port.postMessage({ type: 'metadata', width: packet.width, height: packet.height });

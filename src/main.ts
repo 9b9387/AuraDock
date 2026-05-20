@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
 import { VisionAgent } from './main/vision-agent';
+import { ConfigManager } from './main/config-manager';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
 // Load .env manually
@@ -38,8 +39,8 @@ if (started) {
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -62,6 +63,9 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  // Setup Config handlers
+  ConfigManager.setupHandlers();
+
   // Setup Scrcpy handlers once at startup
   scrcpyManager.setupHandlers();
 
