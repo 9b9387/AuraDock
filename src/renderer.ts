@@ -24,6 +24,7 @@ const agentTaskInput = document.getElementById('agent-task-input') as HTMLTextAr
 const agentLog = document.getElementById('agent-log') as HTMLDivElement;
 
 let currentPort: MessagePort | null = null;
+let activeSerial: string | null = null;
 let decoder: VideoDecoder | null = null;
 let videoWidth = 0;
 let videoHeight = 0;
@@ -145,6 +146,7 @@ async function refreshDevices() {
 
 function startScrcpy(serial: string) {
   console.log('[Renderer] Requesting scrcpy for:', serial);
+  activeSerial = serial;
   deviceListContainer.style.display = 'none';
   scrcpyContainer.style.display = 'block';
   scrcpyStatus.textContent = 'Connecting...';
@@ -207,7 +209,10 @@ function initDecoder() {
     output: (frame) => {
       framesDecoded++;
       if (framesDecoded === 1) console.log('[Renderer] First frame decoded!');
-      if (framesDecoded % 60 === 0) console.log(`[Renderer] Frames decoded: ${framesDecoded}`);
+      // Log every 600 frames (approx. 10 seconds at 60fps) to prevent log flooding and make it clear it is just the mirroring stream
+      if (framesDecoded % 600 === 0) {
+        console.log(`[Renderer] Mirroring stream active. Total frames decoded: ${framesDecoded}`);
+      }
       
       if (videoWidth === 0 || scrcpyCanvas.width !== frame.displayWidth) {
         videoWidth = frame.displayWidth;
@@ -319,6 +324,9 @@ refreshDevices();
 // DOM elements for Gemini Live Call
 const btnStartLive = document.getElementById('btn-start-live') as HTMLButtonElement;
 const btnStopLive = document.getElementById('btn-stop-live') as HTMLButtonElement;
+const btnGlobalStop = document.getElementById('btn-global-stop') as HTMLButtonElement;
+const btnSendLiveChat = document.getElementById('btn-send-live-chat') as HTMLButtonElement;
+const geminiLiveChatInput = document.getElementById('gemini-live-chat-input') as HTMLInputElement;
 const geminiLiveLog = document.getElementById('gemini-live-log') as HTMLDivElement;
 
 function appendLiveLog(log: { type: 'thought' | 'action' | 'status', message: string }) {
@@ -347,7 +355,18 @@ geminiLiveService.onStatusChanged = (status) => {
     // Following ADK best practices, we send raw binary PCM buffers directly
     // to eliminate Base64 encoding CPU overhead and reduce bandwidth by ~33%
     audioMixer.start((pcmData) => {
-      geminiLiveService.sendAudioBuffer(pcmData);
+      // With the latest Gemini 3.1 Live protocol:
+      // If we use JSON communication, we use sendAudioChunk (which puts it in the correct "realtimeInput: { audio: ... }" layout)
+      // Since Google's raw WebSocket endpoint currently expects either a direct binary frame (if setup was done as binary)
+      // or structured JSON under the new non-mediaChunks format, let's use sendAudioChunk here to be 100% compliant with the new JSON layout.
+      const base64 = arrayBufferToBase64(pcmData);
+      geminiLiveService.sendAudioChunk(base64);
+    }).then(() => {
+      // Start Voice output player using the fully initialized shared AudioContext of AudioMixer
+      // Share AudioContext of AudioMixer to play voice back-to-back perfectly!
+      // This is inside .then() to ensure the audioCtx is fully initialized (resolving the race condition where sharedCtx was null)
+      const sharedCtx = (audioMixer as any).audioCtx;
+      geminiVoicePlayer.start(sharedCtx);
     }).catch(err => {
       appendLiveLog({ type: 'status', message: `Audio start error: ${err.message}` });
       geminiLiveService.disconnect();
@@ -357,11 +376,6 @@ geminiLiveService.onStatusChanged = (status) => {
     videoFramePush.start((jpegBase64) => {
       geminiLiveService.sendImageFrame(jpegBase64);
     });
-
-    // Start Voice output player
-    // Share AudioContext of AudioMixer to play voice back-to-back perfectly!
-    const sharedCtx = (audioMixer as any).audioCtx;
-    geminiVoicePlayer.start(sharedCtx);
   } else if (status === 'disconnected' || status === 'error') {
     btnStartLive.style.display = 'inline-block';
     btnStopLive.style.display = 'none';
@@ -409,13 +423,57 @@ btnStartLive.onclick = async () => {
       appendLiveLog({ type: 'status', message: 'Missing GEMINI_API_KEY in environment/.env' });
       return;
     }
-    geminiLiveService.connect(apiKey);
+    if (!activeSerial) {
+      appendLiveLog({ type: 'status', message: 'No active device stream connected. Please connect a device first.' });
+      return;
+    }
+    geminiLiveService.connect(apiKey, activeSerial);
   } catch (err: any) {
     appendLiveLog({ type: 'status', message: `Failed to fetch API key: ${err.message}` });
   }
 };
 
 btnStopLive.onclick = () => {
+  geminiLiveService.disconnect();
+};
+
+function sendLiveChatMessage() {
+  const text = geminiLiveChatInput.value.trim();
+  if (!text) return;
+
+  if (geminiLiveService.connectionStatus !== 'connected') {
+    appendLiveLog({ type: 'status', message: 'Cannot send message: Gemini Live is not connected.' });
+    return;
+  }
+
+  // 1. Log the user's typed message locally in our chat panel
+  appendLiveLog({ type: 'action', message: `You (typed): ${text}` });
+
+  // 2. Send via Gemini Live text input stream protocol
+  geminiLiveService.sendTextMessage(text);
+
+  // 3. Clear the input field
+  geminiLiveChatInput.value = '';
+}
+
+btnSendLiveChat.onclick = sendLiveChatMessage;
+
+geminiLiveChatInput.onkeydown = (e) => {
+  if (e.key === 'Enter') {
+    sendLiveChatMessage();
+  }
+};
+
+btnGlobalStop.onclick = () => {
+  console.log('[Renderer] Global Stop clicked. Interrupting and disconnecting everything...');
+  
+  // 1. Stop Vision Agent if active
+  (window as any).adb.stopAgent();
+  btnStartAgent.style.display = 'inline-block';
+  btnStopAgent.style.display = 'none';
+  appendAgentLog({ type: 'status', message: 'Global emergency stop: Vision Agent stopped.' });
+
+  // 2. Disconnect Gemini Live if active
   geminiLiveService.disconnect();
 };
 

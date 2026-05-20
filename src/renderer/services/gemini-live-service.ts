@@ -9,11 +9,12 @@ export interface GeminiLiveServiceOptions {
 export class GeminiLiveService {
   private ws: WebSocket | null = null;
   private status: ConnectionStatus = 'disconnected';
+  private serial: string | null = null;
 
   // Config options to avoid hardcoding
-  private model = 'models/gemini-2.0-flash-exp';
+  private model = 'models/gemini-3.1-flash-live-preview';
   private voiceName = 'Aoede';
-  private systemInstruction = 'You are a helpful real-time voice and vision assistant. You can see the user\'s Android phone screen from the image frames provided and hear the mixed audio of their microphone and phone system sound. Keep your voice responses concise, conversational, and lively.';
+  private systemInstruction = 'You are a helpful real-time voice and vision assistant. You can see the user\'s Android phone screen from the image frames provided and hear the mixed audio of their microphone and phone system sound. Keep your voice responses concise, conversational, and lively. You can control the phone screen using the provided tools. COORDINATE SYSTEM: All UI coordinates for tap and swipe MUST be normalized from 0 to 1000, where (0, 0) is top-left, and (1000, 1000) is bottom-right.';
 
   // Callback listeners
   public onStatusChanged: ((status: ConnectionStatus, message?: string) => void) | null = null;
@@ -23,7 +24,9 @@ export class GeminiLiveService {
   public onLogMessage: ((type: 'thought' | 'action' | 'status', message: string) => void) | null = null;
 
   constructor(options?: GeminiLiveServiceOptions) {
-    if (options?.model) this.model = options.model;
+    // Determine working model based on API compatibility.
+    // gemini-3.1-flash-live-preview is the recommended latest Live API model for real-time conversations.
+    this.model = options?.model || 'models/gemini-3.1-flash-live-preview';
     if (options?.voiceName) this.voiceName = options.voiceName;
     if (options?.systemInstruction) this.systemInstruction = options.systemInstruction;
   }
@@ -31,11 +34,12 @@ export class GeminiLiveService {
   /**
    * Connect to the Gemini Live API over WebSocket.
    */
-  public connect(apiKey: string): void {
+  public connect(apiKey: string, serial: string): void {
     if (this.ws) {
       this.disconnect();
     }
 
+    this.serial = serial;
     this.setStatus('connecting');
     this.log('status', `Connecting to Gemini Live API (${this.model})...`);
 
@@ -63,8 +67,8 @@ export class GeminiLiveService {
         console.error('[GeminiLiveService] WebSocket Error:', error);
       };
 
-      this.ws.onmessage = (messageEvent) => {
-        this.handleServerMessage(messageEvent.data);
+      this.ws.onmessage = async (messageEvent) => {
+        await this.handleServerMessage(messageEvent.data);
       };
     } catch (err: any) {
       this.setStatus('error', err.message);
@@ -86,9 +90,24 @@ export class GeminiLiveService {
 
   /**
    * Send mixed 16kHz PCM audio chunk (Base64) to Gemini.
+   * Following the latest Gemini 3.1 Live API specification, the "mediaChunks" array is deprecated.
+   * Audio input must be sent directly under the "audio" field inside "realtimeInput".
    */
   public sendAudioChunk(base64Data: string): void {
-    this.sendRealtimeInput('audio/pcm;rate=16000', base64Data);
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const inputMsg = {
+      realtimeInput: {
+        audio: {
+          mimeType: 'audio/pcm;rate=16000',
+          data: base64Data,
+        },
+      },
+    };
+
+    this.ws.send(JSON.stringify(inputMsg));
   }
 
   /**
@@ -105,9 +124,43 @@ export class GeminiLiveService {
 
   /**
    * Send 1 FPS JPEG screen frame (Base64) to Gemini.
+   * Following the latest Gemini 3.1 Live API specification, the "mediaChunks" array is deprecated.
+   * Video input must be sent directly under the "video" field inside "realtimeInput".
    */
   public sendImageFrame(base64Data: string): void {
-    this.sendRealtimeInput('image/jpeg', base64Data);
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const inputMsg = {
+      realtimeInput: {
+        video: {
+          mimeType: 'image/jpeg',
+          data: base64Data,
+        },
+      },
+    };
+
+    this.ws.send(JSON.stringify(inputMsg));
+  }
+
+  /**
+   * Send text message to Gemini Live.
+   * Following the latest Gemini 3.1 Live API specification, direct "text" field can be sent in realtimeInput.
+   */
+  public sendTextMessage(text: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const inputMsg = {
+      realtimeInput: {
+        text: text,
+      },
+    };
+
+    this.ws.send(JSON.stringify(inputMsg));
+    this.log('action', `Sent text chat input: "${text}"`);
   }
 
   /**
@@ -163,6 +216,61 @@ export class GeminiLiveService {
             },
           ],
         },
+        tools: [
+          {
+            functionDeclarations: [
+              {
+                name: 'tap',
+                description: 'Tap on the screen at specified normalized coordinates (x, y). Use this to click buttons, icons, links, or text.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    x: { type: 'INTEGER', description: 'X coordinate (normalized 0-1000)' },
+                    y: { type: 'INTEGER', description: 'Y coordinate (normalized 0-1000)' },
+                  },
+                  required: ['x', 'y'],
+                },
+              },
+              {
+                name: 'swipe',
+                description: 'Swipe on the screen from normalized (x1, y1) to (x2, y2). Use this to scroll or drag.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    x1: { type: 'INTEGER', description: 'Start X coordinate (normalized 0-1000)' },
+                    y1: { type: 'INTEGER', description: 'Start Y coordinate (normalized 0-1000)' },
+                    x2: { type: 'INTEGER', description: 'End X coordinate (normalized 0-1000)' },
+                    y2: { type: 'INTEGER', description: 'End Y coordinate (normalized 0-1000)' },
+                    durationMs: { type: 'INTEGER', description: 'Swipe duration in milliseconds (default 300)' },
+                  },
+                  required: ['x1', 'y1', 'x2', 'y2'],
+                },
+              },
+              {
+                name: 'input_text',
+                description: 'Input text into the currently focused text field.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    text: { type: 'STRING', description: 'The text to input' },
+                  },
+                  required: ['text'],
+                },
+              },
+              {
+                name: 'key_event',
+                description: 'Press a physical/system button: BACK, HOME, or APP_SWITCH (recent apps list).',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    key: { type: 'STRING', enum: ['BACK', 'HOME', 'APP_SWITCH'], description: 'The system key to press' },
+                  },
+                  required: ['key'],
+                },
+              },
+            ],
+          },
+        ],
       },
     };
 
@@ -195,9 +303,22 @@ export class GeminiLiveService {
   /**
    * Helper: Parse received WebSocket message.
    */
-  private handleServerMessage(dataStr: string): void {
+  private async handleServerMessage(data: any): Promise<void> {
     try {
-      const msg = JSON.parse(dataStr);
+      let jsonData = '';
+
+      if (data instanceof Blob) {
+        jsonData = await data.text();
+      } else if (data instanceof ArrayBuffer) {
+        jsonData = new TextDecoder().decode(data);
+      } else if (typeof data === 'string') {
+        jsonData = data;
+      } else {
+        console.warn('[GeminiLiveService] Received unknown message format:', data);
+        return;
+      }
+
+      const msg = JSON.parse(jsonData);
 
       if (msg.serverContent) {
         const content = msg.serverContent;
@@ -233,12 +354,61 @@ export class GeminiLiveService {
         }
       }
 
-      // Handle raw tool calls if Gemini requests them (Optional log)
+      // Handle raw tool calls if Gemini requests them
       if (msg.toolCall) {
-        this.log('action', `Gemini requested tool call: ${JSON.stringify(msg.toolCall)}`);
+        this.handleToolCalls(msg.toolCall);
       }
     } catch (err) {
       console.error('[GeminiLiveService] Failed to parse message:', err);
+    }
+  }
+
+  /**
+   * Helper: Handle incoming Tool Calls asynchronously and return results.
+   */
+  private async handleToolCalls(toolCall: any): Promise<void> {
+    if (!toolCall || !toolCall.functionCalls) return;
+
+    const functionResponses: any[] = [];
+
+    for (const call of toolCall.functionCalls) {
+      const { name, id, args } = call;
+      this.log('action', `Gemini Live requested tool call '${name}' with args: ${JSON.stringify(args)}`);
+
+      try {
+        if (!this.serial) {
+          throw new Error('No active device serial connected to Gemini Live.');
+        }
+
+        // Execute the tool in the main process via IPC
+        const result = await (window as any).adb.executeTool(this.serial, name, args);
+        this.log('status', `Tool '${name}' completed: ${JSON.stringify(result)}`);
+
+        functionResponses.push({
+          id,
+          response: {
+            output: result,
+          },
+        });
+      } catch (err: any) {
+        this.log('status', `Tool '${name}' failed: ${err.message}`);
+        functionResponses.push({
+          id,
+          response: {
+            output: { status: 'error', error: err.message },
+          },
+        });
+      }
+    }
+
+    if (functionResponses.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const responseMsg = {
+        toolResponse: {
+          functionResponses,
+        },
+      };
+      this.ws.send(JSON.stringify(responseMsg));
+      this.log('action', `Sent toolCall response back to Gemini.`);
     }
   }
 

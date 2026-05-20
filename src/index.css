@@ -156,6 +156,16 @@ button:hover {
   background-color: #ff4444;
 }
 
+#btn-global-stop {
+  background-color: #dc3545 !important;
+  color: white !important;
+  font-weight: bold;
+}
+
+#btn-global-stop:hover {
+  background-color: #bd2130 !important;
+}
+
 #scrcpy-canvas {
   max-width: 100%;
   max-height: 100%;

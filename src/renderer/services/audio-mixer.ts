@@ -47,6 +47,11 @@ export class AudioMixer {
         await this.audioCtx.resume();
       }
 
+      if (!this.audioCtx) {
+        console.warn('[AudioMixer] AudioContext was stopped before initialization completed.');
+        return;
+      }
+
       console.log(`[AudioMixer] Web AudioContext initialized. Native Sample Rate: ${this.audioCtx.sampleRate}Hz`);
 
       // 2. Setup Microphone Input
@@ -58,6 +63,15 @@ export class AudioMixer {
         },
         video: false,
       });
+
+      if (!this.audioCtx) {
+        console.warn('[AudioMixer] AudioContext was stopped during mic acquisition.');
+        if (this.micStream) {
+          this.micStream.getTracks().forEach((track) => track.stop());
+          this.micStream = null;
+        }
+        return;
+      }
 
       this.micSourceNode = this.audioCtx.createMediaStreamSource(this.micStream);
 

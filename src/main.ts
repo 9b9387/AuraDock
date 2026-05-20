@@ -85,6 +85,12 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Clean up background scrcpy/adb stream services on exit to prevent ghost processes and audio capture locks.
+app.on('before-quit', () => {
+  console.log('[Main] App is quitting. Cleaning up background services...');
+  scrcpyManager.stopAll();
+});
+
 app.on('activate', () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.

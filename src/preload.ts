@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("adb", {
   getGeminiApiKey: () => ipcRenderer.invoke("config:get-gemini-key"),
   getDevices: () => ipcRenderer.invoke("adb:get-devices"),
+  executeTool: (serial: string, name: string, args: any) => ipcRenderer.invoke("adb:execute-tool", { serial, name, args }),
   requestScrcpy: (serial: string) => ipcRenderer.send("adb:request-scrcpy", serial),
   onScrcpyPort: (_callback: (port: MessagePort) => void) => {
     const listener = (event: Electron.IpcRendererEvent) => {
