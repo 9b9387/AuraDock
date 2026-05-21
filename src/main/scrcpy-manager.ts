@@ -4,6 +4,13 @@ import { ScrcpyStreamService, MediaKind, ControlMessageType } from '@9b9387/andr
 
 import { AdbDeviceInfo } from '../types';
 
+function truncateBase64(str: string): string {
+  if (typeof str !== 'string') return str;
+  return str.replace(/([a-zA-Z0-9+/=]{200,})/g, (match) => {
+    return `${match.substring(0, 50)}... [truncated ${match.length} chars]`;
+  });
+}
+
 export class ScrcpyManager {
   private adb: any = null;
   private services: Map<string, ScrcpyStreamService> = new Map();
@@ -184,17 +191,18 @@ export class ScrcpyManager {
         throw new Error(`Scrcpy stream service not found for serial: ${serial}`);
       }
 
-      console.log(`[ScrcpyManager] Executing tool '${name}' on device '${serial}' with args:`, args);
+      console.log(`[ScrcpyManager] Executing tool '${name}' on device '${serial}' with args: ${truncateBase64(JSON.stringify(args))}`);
 
       switch (name) {
         case 'tap': {
           const { x, y } = args;
-          const meta = service.currentMeta;
-          if (!meta) throw new Error('No stream metadata available');
+          const width = (service as any).latestSession?.width ?? service.currentMeta?.width;
+          const height = (service as any).latestSession?.height ?? service.currentMeta?.height;
+          if (!width || !height) throw new Error('No stream metadata or session info available');
 
           // Scale normalized coordinate (0-1000) to actual pixels
-          const pixelX = Math.round((x / 1000) * meta.width);
-          const pixelY = Math.round((y / 1000) * meta.height);
+          const pixelX = Math.round((x / 1000) * width);
+          const pixelY = Math.round((y / 1000) * height);
 
           console.log(`[ScrcpyManager] Tap tool: (${x}, ${y}) -> Pixels: (${pixelX}, ${pixelY})`);
 
@@ -204,8 +212,8 @@ export class ScrcpyManager {
             pointerId: -1n,
             x: pixelX,
             y: pixelY,
-            screenWidth: meta.width,
-            screenHeight: meta.height,
+            screenWidth: width,
+            screenHeight: height,
             pressure: 1,
           });
 
@@ -217,8 +225,8 @@ export class ScrcpyManager {
             pointerId: -1n,
             x: pixelX,
             y: pixelY,
-            screenWidth: meta.width,
-            screenHeight: meta.height,
+            screenWidth: width,
+            screenHeight: height,
             pressure: 0,
           });
 
@@ -227,13 +235,14 @@ export class ScrcpyManager {
 
         case 'swipe': {
           const { x1, y1, x2, y2, durationMs = 300 } = args;
-          const meta = service.currentMeta;
-          if (!meta) throw new Error('No stream metadata available');
+          const width = (service as any).latestSession?.width ?? service.currentMeta?.width;
+          const height = (service as any).latestSession?.height ?? service.currentMeta?.height;
+          if (!width || !height) throw new Error('No stream metadata or session info available');
 
-          const px1 = Math.round((x1 / 1000) * meta.width);
-          const py1 = Math.round((y1 / 1000) * meta.height);
-          const px2 = Math.round((x2 / 1000) * meta.width);
-          const py2 = Math.round((y2 / 1000) * meta.height);
+          const px1 = Math.round((x1 / 1000) * width);
+          const py1 = Math.round((y1 / 1000) * height);
+          const px2 = Math.round((x2 / 1000) * width);
+          const py2 = Math.round((y2 / 1000) * height);
 
           console.log(`[ScrcpyManager] Swipe tool: (${x1}, ${y1}) -> (${x2}, ${y2}) in ${durationMs}ms`);
 
@@ -243,8 +252,8 @@ export class ScrcpyManager {
             pointerId: -1n,
             x: px1,
             y: py1,
-            screenWidth: meta.width,
-            screenHeight: meta.height,
+            screenWidth: width,
+            screenHeight: height,
             pressure: 1,
           });
 
@@ -257,8 +266,8 @@ export class ScrcpyManager {
               pointerId: -1n,
               x: Math.round(px1 + (px2 - px1) * (i / steps)),
               y: Math.round(py1 + (py2 - py1) * (i / steps)),
-              screenWidth: meta.width,
-              screenHeight: meta.height,
+              screenWidth: width,
+              screenHeight: height,
               pressure: 1,
             });
           }
@@ -271,8 +280,8 @@ export class ScrcpyManager {
             pointerId: -1n,
             x: px2,
             y: py2,
-            screenWidth: meta.width,
-            screenHeight: meta.height,
+            screenWidth: width,
+            screenHeight: height,
             pressure: 0,
           });
 

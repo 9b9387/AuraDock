@@ -4,6 +4,13 @@ import { ToolRegistry } from './agent/tool-registry';
 import { AgentLoop } from './agent/agent-loop';
 import { AgentContext } from './agent/types';
 
+function truncateBase64(str: string): string {
+  if (typeof str !== 'string') return str;
+  return str.replace(/([a-zA-Z0-9+/=]{200,})/g, (match) => {
+    return `${match.substring(0, 50)}... [truncated ${match.length} chars]`;
+  });
+}
+
 export class VisionAgent implements AgentContext {
   private agent: any = null;
   private currentSerial: string | null = null;
@@ -40,7 +47,11 @@ COORDINATE SYSTEM:
 - All UI coordinates (tap, swipe) MUST be normalized from 0 to 1000.
 - (0, 0) is the top-left corner.
 - (1000, 1000) is the bottom-right corner.
-- Use the visual feedback to determine the 0-1000 values.`, 
+- Use the visual feedback to determine the 0-1000 values.
+
+TASK COMPLETION:
+- If all steps in your plan are completed, or the task goal is fully achieved, DO NOT call any more tools. Just output a final text explanation stating that the task is finished (e.g. "Task complete: [explanation]").
+- Do not perform redundant, continuous, or extra UI operations after your plan has been executed.`, 
         tools: tools,
       });
 
@@ -76,6 +87,25 @@ COORDINATE SYSTEM:
         this.loop.stop();
         this.log('status', 'Stop signal received. Stopping agent...');
       }
+    });
+
+    ipcMain.on('agent:pause', () => {
+      if (this.loop) {
+        this.loop.pause();
+      }
+    });
+
+    ipcMain.on('agent:resume', (event, newContext?: string) => {
+      if (this.loop) {
+        this.loop.resume(newContext);
+      }
+    });
+
+    ipcMain.handle('agent:get-state', () => {
+      if (this.loop) {
+        return this.loop.getShareableState();
+      }
+      return null;
     });
 
     ipcMain.on('agent:screenshot-data', (event, base64Data) => {
@@ -137,9 +167,10 @@ COORDINATE SYSTEM:
 
   log(type: 'thought' | 'action' | 'status', message: string) {
     const win = BrowserWindow.getAllWindows()[0];
+    const cleanMessage = truncateBase64(message);
     if (win) {
-      win.webContents.send('agent:log', { type, message });
+      win.webContents.send('agent:log', { type, message: cleanMessage });
     }
-    console.log(`[Agent ${type.toUpperCase()}] ${message}`);
+    console.log(`[Agent ${type.toUpperCase()}] ${cleanMessage}`);
   }
 }

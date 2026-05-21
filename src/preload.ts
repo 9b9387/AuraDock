@@ -26,4 +26,7 @@ contextBridge.exposeInMainWorld("adb", {
   },
   startAgent: (task: string) => ipcRenderer.send("agent:start", task),
   stopAgent: () => ipcRenderer.send("agent:stop"),
+  pauseAgent: () => ipcRenderer.send("agent:pause"),
+  resumeAgent: (newContext?: string) => ipcRenderer.send("agent:resume", newContext),
+  getAgentState: () => ipcRenderer.invoke("agent:get-state"),
 });

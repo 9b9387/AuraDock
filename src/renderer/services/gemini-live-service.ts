@@ -6,6 +6,13 @@ export interface GeminiLiveServiceOptions {
   systemInstruction?: string;
 }
 
+function truncateBase64(str: string): string {
+  if (typeof str !== 'string') return str;
+  return str.replace(/([a-zA-Z0-9+/=]{200,})/g, (match) => {
+    return `${match.substring(0, 50)}... [truncated ${match.length} chars]`;
+  });
+}
+
 export class GeminiLiveService {
   private ws: WebSocket | null = null;
   private status: ConnectionStatus = 'disconnected';
@@ -14,7 +21,8 @@ export class GeminiLiveService {
   // Config options to avoid hardcoding
   private model = 'models/gemini-3.1-flash-live-preview';
   private voiceName = 'Aoede';
-  private systemInstruction = 'You are a helpful real-time voice and vision assistant. You can see the user\'s Android phone screen from the image frames provided and hear the mixed audio of their microphone and phone system sound. Keep your voice responses concise, conversational, and lively. You can control the phone screen using the provided tools. COORDINATE SYSTEM: All UI coordinates for tap and swipe MUST be normalized from 0 to 1000, where (0, 0) is top-left, and (1000, 1000) is bottom-right.';
+  private defaultSystemInstruction = 'You are a helpful real-time voice and vision assistant. You can see the user\'s Android phone screen from the image frames provided and hear the mixed audio of their microphone and phone system sound. Keep your voice responses concise, conversational, and lively. You can control the phone screen using the provided tools. COORDINATE SYSTEM: All UI coordinates for tap and swipe MUST be normalized from 0 to 1000, where (0, 0) is top-left, and (1000, 1000) is bottom-right.';
+  private systemInstruction = this.defaultSystemInstruction;
 
   // Callback listeners
   public onStatusChanged: ((status: ConnectionStatus, message?: string) => void) | null = null;
@@ -28,17 +36,21 @@ export class GeminiLiveService {
     // gemini-3.1-flash-live-preview is the recommended latest Live API model for real-time conversations.
     this.model = options?.model || 'models/gemini-3.1-flash-live-preview';
     if (options?.voiceName) this.voiceName = options.voiceName;
-    if (options?.systemInstruction) this.systemInstruction = options.systemInstruction;
+    if (options?.systemInstruction) {
+      this.defaultSystemInstruction = options.systemInstruction;
+      this.systemInstruction = options.systemInstruction;
+    }
   }
 
   /**
    * Connect to the Gemini Live API over WebSocket.
    */
-  public connect(apiKey: string, serial: string): void {
+  public connect(apiKey: string, serial: string, customSystemInstruction?: string): void {
     if (this.ws) {
       this.disconnect();
     }
 
+    this.systemInstruction = customSystemInstruction || this.defaultSystemInstruction;
     this.serial = serial;
     this.setStatus('connecting');
     this.log('status', `Connecting to Gemini Live API (${this.model})...`);
@@ -184,10 +196,11 @@ export class GeminiLiveService {
    * Helper: Send Logger event.
    */
   private log(type: 'thought' | 'action' | 'status', message: string): void {
+    const cleanMessage = truncateBase64(message);
     if (this.onLogMessage) {
-      this.onLogMessage(type, message);
+      this.onLogMessage(type, cleanMessage);
     }
-    console.log(`[GeminiLiveService ${type.toUpperCase()}] ${message}`);
+    console.log(`[GeminiLiveService ${type.toUpperCase()}] ${cleanMessage}`);
   }
 
   /**

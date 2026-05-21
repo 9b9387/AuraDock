@@ -11,13 +11,14 @@ export const createTapTool = (context: AgentContext) => new FunctionTool({
     y: z.number().describe('Y coordinate (normalized 0-1000)'),
   }),
   execute: async ({ x, y }) => {
-    const service = context.getService();
-    const meta = service.currentMeta;
-    if (!meta) throw new Error('No stream metadata');
+    const service = context.getService() as any;
+    const width = service.latestSession?.width ?? service.currentMeta?.width;
+    const height = service.latestSession?.height ?? service.currentMeta?.height;
+    if (!width || !height) throw new Error('No stream metadata or session info available');
 
     // Scale normalized 0-1000 to actual pixels
-    const pixelX = Math.round((x / 1000) * meta.width);
-    const pixelY = Math.round((y / 1000) * meta.height);
+    const pixelX = Math.round((x / 1000) * width);
+    const pixelY = Math.round((y / 1000) * height);
 
     context.log('action', `Tapping at (${x}, ${y}) -> Pixels: (${pixelX}, ${pixelY})`);
 
@@ -27,8 +28,8 @@ export const createTapTool = (context: AgentContext) => new FunctionTool({
       pointerId: -1n,
       x: pixelX,
       y: pixelY,
-      screenWidth: meta.width,
-      screenHeight: meta.height,
+      screenWidth: width,
+      screenHeight: height,
       pressure: 1,
     });
     await new Promise(r => setTimeout(r, 50));
@@ -38,8 +39,8 @@ export const createTapTool = (context: AgentContext) => new FunctionTool({
       pointerId: -1n,
       x: pixelX,
       y: pixelY,
-      screenWidth: meta.width,
-      screenHeight: meta.height,
+      screenWidth: width,
+      screenHeight: height,
       pressure: 0,
     });
     return { status: 'success' };

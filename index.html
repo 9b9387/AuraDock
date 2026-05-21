@@ -2,60 +2,10 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
-
+    <title>Omni Agent</title>
   </head>
-  <body>
-    <h1>Scrcpy Electron</h1>
-    <div id="device-list-container">
-      <h2>Connected Devices</h2>
-      <button id="refresh-devices">Refresh</button>
-      <ul id="device-list"></ul>
-    </div>
-    <div id="scrcpy-container" style="display: none;">
-      <div id="scrcpy-header">
-        <button id="back-to-list">Back</button>
-        <span id="scrcpy-status">Connecting...</span>
-        <div id="scrcpy-toolbar">
-          <button id="btn-screenshot">Screenshot</button>
-          <button id="btn-record">Start Record</button>
-          <button id="btn-global-stop">Stop Active Tasks</button>
-        </div>
-      </div>
-      <div id="scrcpy-error" style="color: #ff4444; margin: 10px; display: none;"></div>
-      
-      <div class="main-layout">
-        <div class="video-container">
-          <canvas id="scrcpy-canvas"></canvas>
-        </div>
-        <div id="agent-panel" class="agent-panel">
-          <h3>Vision Agent</h3>
-          <div id="agent-log" class="agent-log"></div>
-          <div class="agent-input-container">
-            <textarea id="agent-task-input" placeholder="Enter task (e.g., 'Open Settings and check about phone')"></textarea>
-            <div class="agent-controls">
-              <button id="btn-start-agent">Run Task</button>
-              <button id="btn-stop-agent" style="background-color: #ff4444; display: none;">Stop Task</button>
-            </div>
-          </div>
-        </div>
-        
-        <div id="gemini-live-panel" class="agent-panel">
-          <h3>Gemini Live Call</h3>
-          <div id="gemini-live-log" class="agent-log"></div>
-          <div class="agent-input-container">
-            <div style="display: flex; gap: 8px;">
-              <input id="gemini-live-chat-input" type="text" placeholder="Type a message to Gemini..." style="flex: 1; background-color: #333; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 8px;" />
-              <button id="btn-send-live-chat" style="background-color: #007bff; padding: 8px 12px;">Send</button>
-            </div>
-            <div class="agent-controls" style="display: flex; gap: 10px;">
-              <button id="btn-start-live" style="background-color: #28a745; flex: 1;">Start Live Call</button>
-              <button id="btn-stop-live" style="background-color: #ff4444; display: none; flex: 1;">End Live Call</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <script type="module" src="/src/renderer.ts"></script>
+  <body class="bg-zinc-950 text-zinc-100 h-screen w-screen overflow-hidden">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="/src/renderer.tsx"></script>
   </body>
 </html>

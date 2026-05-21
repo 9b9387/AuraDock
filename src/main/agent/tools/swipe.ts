@@ -14,14 +14,15 @@ export const createSwipeTool = (context: AgentContext) => new FunctionTool({
     durationMs: z.number().default(300),
   }),
   execute: async ({ x1, y1, x2, y2, durationMs }) => {
-    const service = context.getService();
-    const meta = service.currentMeta;
-    if (!meta) throw new Error('No stream metadata');
+    const service = context.getService() as any;
+    const width = service.latestSession?.width ?? service.currentMeta?.width;
+    const height = service.latestSession?.height ?? service.currentMeta?.height;
+    if (!width || !height) throw new Error('No stream metadata or session info available');
 
-    const px1 = Math.round((x1 / 1000) * meta.width);
-    const py1 = Math.round((y1 / 1000) * meta.height);
-    const px2 = Math.round((x2 / 1000) * meta.width);
-    const py2 = Math.round((y2 / 1000) * meta.height);
+    const px1 = Math.round((x1 / 1000) * width);
+    const py1 = Math.round((y1 / 1000) * height);
+    const px2 = Math.round((x2 / 1000) * width);
+    const py2 = Math.round((y2 / 1000) * height);
 
     context.log('action', `Swiping (${x1}, ${y1})->(${x2}, ${y2}) -> Pixels (${px1}, ${py1})->(${px2}, ${py2})`);
 
@@ -31,8 +32,8 @@ export const createSwipeTool = (context: AgentContext) => new FunctionTool({
       pointerId: -1n,
       x: px1,
       y: py1,
-      screenWidth: meta.width,
-      screenHeight: meta.height,
+      screenWidth: width,
+      screenHeight: height,
       pressure: 1,
     });
 
@@ -45,8 +46,8 @@ export const createSwipeTool = (context: AgentContext) => new FunctionTool({
         pointerId: -1n,
         x: px1 + (px2 - px1) * (i / steps),
         y: py1 + (py2 - py1) * (i / steps),
-        screenWidth: meta.width,
-        screenHeight: meta.height,
+        screenWidth: width,
+        screenHeight: height,
         pressure: 1,
       });
     }
@@ -57,8 +58,8 @@ export const createSwipeTool = (context: AgentContext) => new FunctionTool({
       pointerId: -1n,
       x: px2,
       y: py2,
-      screenWidth: meta.width,
-      screenHeight: meta.height,
+      screenWidth: width,
+      screenHeight: height,
       pressure: 0,
     });
     return { status: 'success' };
