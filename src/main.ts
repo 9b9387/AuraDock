@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import path from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
@@ -37,10 +37,18 @@ if (started) {
 }
 
 const createWindow = () => {
+  const isDark = nativeTheme.shouldUseDarkColors;
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: process.platform !== 'darwin' ? {
+      color: isDark ? '#09090b' : '#ffffff',
+      symbolColor: isDark ? '#f4f4f5' : '#09090b',
+      height: 36,
+    } : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -72,6 +80,53 @@ app.on('ready', () => {
   // Initialize VisionAgent
   const visionAgent = new VisionAgent();
   console.log('[Main] VisionAgent initialized');
+
+  // Setup theme IPC handlers
+  ipcMain.handle('dark-mode:set', (_event, theme: 'dark' | 'light' | 'system') => {
+    nativeTheme.themeSource = theme;
+    const isDark = nativeTheme.shouldUseDarkColors;
+    
+    if (process.platform !== 'darwin') {
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.setTitleBarOverlay({
+          color: isDark ? '#09090b' : '#ffffff',
+          symbolColor: isDark ? '#f4f4f5' : '#09090b',
+          height: 36,
+        });
+      });
+    }
+    
+    return { isDark, themeSource: nativeTheme.themeSource };
+  });
+
+  ipcMain.handle('dark-mode:get-current', () => {
+    return {
+      isDark: nativeTheme.shouldUseDarkColors,
+      themeSource: nativeTheme.themeSource,
+    };
+  });
+
+  // Listen for native OS theme changes
+  nativeTheme.on('updated', () => {
+    const isDark = nativeTheme.shouldUseDarkColors;
+    
+    if (process.platform !== 'darwin') {
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.setTitleBarOverlay({
+          color: isDark ? '#09090b' : '#ffffff',
+          symbolColor: isDark ? '#f4f4f5' : '#09090b',
+          height: 36,
+        });
+      });
+    }
+    
+    BrowserWindow.getAllWindows().forEach(win => {
+      win.webContents.send('dark-mode:updated', {
+        isDark,
+        themeSource: nativeTheme.themeSource,
+      });
+    });
+  });
 
   createWindow();
 });

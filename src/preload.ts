@@ -34,4 +34,11 @@ contextBridge.exposeInMainWorld("adb", {
   pauseAgent: () => ipcRenderer.send("agent:pause"),
   resumeAgent: (newContext?: string) => ipcRenderer.send("agent:resume", newContext),
   getAgentState: () => ipcRenderer.invoke("agent:get-state"),
+  setTheme: (theme: "dark" | "light" | "system") => ipcRenderer.invoke("dark-mode:set", theme),
+  getCurrentTheme: () => ipcRenderer.invoke("dark-mode:get-current"),
+  onThemeUpdated: (callback: (data: { isDark: boolean; themeSource: "dark" | "light" | "system" }) => void) => {
+    const listener = (_event: any, data: { isDark: boolean; themeSource: "dark" | "light" | "system" }) => callback(data);
+    ipcRenderer.on("dark-mode:updated", listener);
+    return () => ipcRenderer.removeListener("dark-mode:updated", listener);
+  },
 });
