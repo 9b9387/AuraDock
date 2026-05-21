@@ -28,7 +28,7 @@
   --radius-4xl: 1rem;
 }
 
-/* Scrollbar styles to match the beautiful dark theme */
+/* Scrollbar styles to match the beautiful light and dark themes */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -39,12 +39,22 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46; /* zinc-700 */
+  background: #d4d4d8; /* zinc-300 for light theme */
   border-radius: 9999px;
 }
 
+.dark ::-webkit-scrollbar-thumb,
+html.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* zinc-700 for dark theme */
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b; /* zinc-600 */
+  background: #a1a1aa; /* zinc-400 for light theme hover */
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b; /* zinc-600 for dark theme hover */
 }
 
 /* Custom background animations or styles if needed */

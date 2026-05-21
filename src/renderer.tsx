@@ -4,9 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { 
   Smartphone, Bot, Mic, RefreshCw, Send, Play, Square, 
   Camera, AlertCircle, Cpu, Sparkles, Check, 
-  ChevronDown, PhoneOff, List, Circle, ArrowLeft,
+  PhoneOff, List, Circle, ArrowLeft,
   MessageSquare, Settings, X, Shield,
-  Languages, Key, Eye, EyeOff, Save
+  Languages, Key, Eye, EyeOff, Save, Link2Off
 } from 'lucide-react';
 
 import { ScrcpyAudioQueue } from './renderer/services/scrcpy-audio-queue';
@@ -65,7 +65,6 @@ export function App() {
   const [activeDeviceModel, setActiveDeviceModel] = useState<string | null>(null);
   const [scrcpyStatus, setScrcpyStatus] = useState<string>('Disconnected');
   const [scrcpyError, setScrcpyError] = useState<string | null>(null);
-  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
 
   // Load configuration from Electron on mount
   useEffect(() => {
@@ -409,7 +408,6 @@ export function App() {
     setActiveDeviceModel(modelName || serial);
     setScrcpyStatus('Connecting...');
     setScrcpyError(null);
-    setDeviceDropdownOpen(false);
 
     const onMessage = (event: MessageEvent) => {
       if (event.data.type === 'scrcpy-port' && event.ports[0]) {
@@ -754,8 +752,23 @@ INSTRUCTION FOR TAKE-OVER:
           <span className="text-xs font-bold tracking-wider text-zinc-700 dark:text-zinc-300">Omni Agent</span>
         </div>
         
-        {/* Draggable center area */}
-        <div className="flex-1 h-full" />
+        {/* Centered Device & Streaming Status Info (no-drag) */}
+        <div className="flex-1 h-full flex items-center justify-center">
+          {activeSerial && (
+            <div className="text-xs font-bold text-zinc-600 dark:text-zinc-400 tracking-wide flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>设备：{activeDeviceModel}</span>
+              <span className="text-zinc-300 dark:text-zinc-700">|</span>
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {scrcpyStatus.toLowerCase().includes('stream') 
+                  ? '推流中' 
+                  : scrcpyStatus.toLowerCase().includes('connect') 
+                  ? '连接中' 
+                  : scrcpyStatus}
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Action controls (No-drag) */}
         <div 
@@ -790,87 +803,11 @@ INSTRUCTION FOR TAKE-OVER:
       <div className="flex flex-1 h-[calc(100vh-36px)] w-full overflow-hidden">
         
         {/* LEFT PANEL: Phone screen mirroring & canvas stream */}
-        <div className="flex flex-col flex-[3] border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 h-full min-w-0 relative transition-colors duration-200">
+        <div 
+          className="flex flex-col flex-[3] border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 pt-4 px-4 h-full min-w-0 relative overflow-hidden transition-colors duration-200"
+          style={{ paddingBottom: '12px', boxSizing: 'border-box' } as React.CSSProperties}
+        >
           
-          {/* Mirror Header Section */}
-          <div className="flex items-center justify-between mb-4 z-20">
-            <div className="relative">
-              {/* Device selection Dropdown */}
-              <button 
-                onClick={() => setDeviceDropdownOpen(!deviceDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
-              >
-                <Smartphone className={`w-4 h-4 ${activeSerial ? 'text-emerald-500' : 'text-zinc-500'}`} />
-                <span className="max-w-[120px] truncate">
-                  {activeDeviceModel || '选择设备'}
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${deviceDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </button>
-
-              {/* Dropdown Content */}
-              {deviceDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-72 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="flex items-center justify-between px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800 mb-1">
-                    <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Android 设备</span>
-                    <button 
-                      onClick={refreshDevices}
-                      disabled={loadingDevices}
-                      className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${loadingDevices ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {devices.length === 0 ? (
-                      <div className="text-center py-6 text-sm text-zinc-500">未发现可用设备</div>
-                    ) : (
-                      devices.map((device) => {
-                        const serial = device.serial || (device as any).id;
-                        const isConnected = activeSerial === serial;
-                        return (
-                          <div 
-                            key={serial} 
-                            className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                          >
-                            <div className="flex flex-col min-w-0 pr-2">
-                              <span className="text-sm font-medium truncate text-zinc-800 dark:text-zinc-100">
-                                {device.model || '未知设备'}
-                              </span>
-                              <span className="text-xxs font-mono text-zinc-500 dark:text-zinc-500 truncate mt-0.5">
-                                {serial}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => {
-                                if (isConnected) {
-                                  disconnectScrcpy();
-                                } else {
-                                  startScrcpy(serial, device.model);
-                                }
-                              }}
-                              className={`text-xs px-2.5 py-1.5 rounded-md font-semibold transition-colors shrink-0 ${
-                                isConnected 
-                                  ? 'bg-zinc-200 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-950 hover:text-red-600 dark:hover:text-red-400 text-zinc-700 dark:text-zinc-300' 
-                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                              }`}
-                            >
-                              {isConnected ? '断开' : '连接'}
-                            </button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
-                {scrcpyStatus}
-              </span>
-            </div>
-          </div>
 
           {/* Video Canvas Mirror Stream area */}
           <div ref={containerRef} className="flex-1 flex items-center justify-center bg-zinc-100/40 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-zinc-900 overflow-hidden relative group transition-colors duration-200">
@@ -885,24 +822,69 @@ INSTRUCTION FOR TAKE-OVER:
             )}
 
             {!activeSerial && (
-              <div className="flex flex-col items-center justify-center p-8 max-w-sm text-center">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
-                  <div className="w-16 h-16 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-400 dark:text-zinc-500 shadow-xl relative z-10">
-                    <Smartphone className="w-8 h-8" />
+              <div className="flex flex-col items-center justify-center p-8 w-full max-w-md text-center">
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+                  <div className="w-14 h-16 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-400 dark:text-zinc-500 shadow-xl relative z-10">
+                    <Smartphone className="w-8 h-8 text-emerald-600 dark:text-emerald-500" />
                   </div>
                 </div>
-                <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">未连接 Android 设备</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
-                  选择一台已授权的设备开始投流。请点击下方按钮选择或从左上角下拉菜单选择。
+                <h3 className="text-md font-bold text-zinc-800 dark:text-zinc-100 mb-1">Android 设备连接舱</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-6 max-w-sm leading-relaxed">
+                  检测到本地 ADB 授权设备。请选择一台设备并连接开始智能协同投流控制。
                 </p>
-                <button
-                  onClick={() => setDeviceDropdownOpen(true)}
-                  className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950 font-semibold shadow-lg transition-colors text-sm cursor-pointer"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  <span>选择设备</span>
-                </button>
+
+                {/* Device List Box */}
+                <div className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-900">
+                    <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400">可用设备列表 ({devices.length})</span>
+                    <button 
+                      onClick={refreshDevices}
+                      disabled={loadingDevices}
+                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="刷新设备列表"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingDevices ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="p-3 max-h-56 overflow-y-auto space-y-2 text-left">
+                    {devices.length === 0 ? (
+                      <div className="py-8 flex flex-col items-center justify-center text-center">
+                        <AlertCircle className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mb-2" />
+                        <p className="text-xs text-zinc-400 dark:text-zinc-600">未发现可用设备</p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-1 max-w-[280px] text-center">
+                          请确保已开启手机的“USB调试”模式，并使用数据线稳定连接电脑。
+                        </p>
+                      </div>
+                    ) : (
+                      devices.map((device) => {
+                        const serial = device.serial || (device as any).id;
+                        return (
+                          <div 
+                            key={serial} 
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900 hover:border-zinc-200 dark:hover:border-zinc-800 transition-all"
+                          >
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="text-xs font-bold truncate text-zinc-800 dark:text-zinc-100">
+                                {device.model || '未知安卓设备'}
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 truncate mt-0.5">
+                                {serial}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => startScrcpy(serial, device.model)}
+                              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+                            >
+                              连接
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -914,23 +896,15 @@ INSTRUCTION FOR TAKE-OVER:
                 onMouseUp={(e) => handleCanvasMouseEvent(e, 1)}
                 className="max-w-full max-h-[75vh] shadow-2xl rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-crosshair object-contain bg-black"
               />
-              
-              {/* Floating Camera icon on Canvas hover */}
-              <div className="absolute top-4 right-4 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button 
-                  onClick={handleTakeScreenshot}
-                  title="屏幕截图"
-                  className="p-2 rounded-lg bg-white/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-100 text-zinc-500 dark:text-zinc-400 transition-colors cursor-pointer"
-                >
-                  <Camera className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           </div>
 
           {/* Custom Android Navigation Control Bar */}
           {activeSerial && (
-            <div className="mt-4 flex items-center justify-center px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 z-10 shrink-0 transition-colors duration-200">
+            <div className="mt-4 flex items-center justify-between px-4 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 z-10 shrink-0 transition-colors duration-200">
+              {/* Left Slot: Placeholder / Balanced Space */}
+              <div className="w-20" />
+
               {/* Navigation Keys Middle */}
               <div className="flex items-center gap-8">
                 <button 
@@ -958,18 +932,39 @@ INSTRUCTION FOR TAKE-OVER:
                   <List className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Combined Controls on the Right (Screenshot + Disconnect with Icons) */}
+              <div className="w-20 flex justify-end items-center gap-2">
+                <button 
+                  onClick={handleTakeScreenshot}
+                  title="屏幕截图"
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={disconnectScrcpy}
+                  title="断开手机连接"
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-100/60 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                >
+                  <Link2Off className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         {/* RIGHT PANEL: Integrated Unified Workspace (Vision Agent + Gemini Live Call) */}
         {showWorkspace && (
-          <div className="flex flex-col flex-[2] bg-zinc-50 dark:bg-zinc-950 p-4 h-full min-w-[380px] max-w-[480px] transition-colors duration-200">
+          <div 
+            className="flex flex-col flex-[2] bg-zinc-50 dark:bg-zinc-950 pt-4 px-4 h-full min-w-[380px] max-w-[480px] overflow-hidden transition-colors duration-200"
+            style={{ paddingBottom: '12px', boxSizing: 'border-box' } as React.CSSProperties}
+          >
             
             {/* Workspace header */}
             <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-900 pb-3 mb-4 shrink-0">
               <Sparkles className="w-4.5 h-4.5 text-blue-400" />
-              <h2 className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作空间 (WORKSPACE)</h2>
+              <h2 className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作</h2>
               {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-auto"></span>}
             </div>
 
@@ -1118,7 +1113,7 @@ INSTRUCTION FOR TAKE-OVER:
               <div className="relative">
                 {geminiStatus === 'connected' ? (
                   /* If live voice call is connected, show text chat input to Gemini */
-                  <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                  <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
                     <input
                       type="text"
                       value={geminiChatInput}
@@ -1143,7 +1138,7 @@ INSTRUCTION FOR TAKE-OVER:
                       onChange={(e) => setAgentInput(e.target.value)}
                       placeholder="给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)"
                       disabled={agentRunning || !activeSerial}
-                      className="w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors shadow-sm dark:shadow-none"
+                      className="block w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
                     />
                     
                     {/* Run / Stop buttons */}
