@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bot, MessageSquare, Settings } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 
 interface TitleBarProps {
   activeSerial: string | null;
@@ -51,25 +52,27 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         className={`flex items-center gap-1.5 ${!isMac ? 'pr-[140px]' : ''}`}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <button
-          onClick={() => setShowWorkspace(!showWorkspace)}
-          className={`flex items-center justify-center p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer ${
-            showWorkspace 
-              ? 'bg-zinc-100 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700/80' 
-              : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-100'
-          }`}
-          title={showWorkspace ? "隐藏智能协作空间" : "显示智能协作空间"}
-        >
-          <MessageSquare className="w-4 h-4" />
-        </button>
+        <Tooltip content={showWorkspace ? "隐藏智能协作空间" : "显示智能协作空间"} position="bottom">
+          <button
+            onClick={() => setShowWorkspace(!showWorkspace)}
+            className={`flex items-center justify-center p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer ${
+              showWorkspace 
+                ? 'bg-zinc-100 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700/80' 
+                : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-100'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+        </Tooltip>
 
-        <button
-          onClick={() => setShowSettings(true)}
-          className="flex items-center justify-center p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"
-          title="偏好设置"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        <Tooltip content="偏好设置" position="bottom">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center justify-center p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

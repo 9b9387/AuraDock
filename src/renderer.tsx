@@ -657,7 +657,7 @@ INSTRUCTION FOR TAKE-OVER:
           style={{ paddingBottom: '12px', boxSizing: 'border-box' } as React.CSSProperties}
         >
           {/* Video Canvas Mirror Stream area */}
-          <div ref={containerRef} className="flex-1 flex items-center justify-center bg-zinc-100/40 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-zinc-900 overflow-hidden relative group transition-colors duration-200">
+          <div ref={containerRef} className="flex-1 flex items-center justify-center bg-zinc-100/40 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-zinc-900 overflow-hidden relative group transition-colors duration-200 tech-grid">
             {!activeSerial && (
               <DeviceSelector
                 devices={devices}
@@ -671,6 +671,7 @@ INSTRUCTION FOR TAKE-OVER:
               canvasRef={canvasRef}
               activeSerial={activeSerial}
               scrcpyError={scrcpyError}
+              scrcpyStatus={scrcpyStatus}
               handleCanvasMouseEvent={handleCanvasMouseEvent}
             />
           </div>
