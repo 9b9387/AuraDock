@@ -51,6 +51,15 @@ export class GeminiLiveService {
   }
 
   /**
+   * Set model dynamically
+   */
+  public setModel(model: string): void {
+    if (model) {
+      this.model = model;
+    }
+  }
+
+  /**
    * Connect to the Gemini Live API over WebSocket.
    */
   public connect(apiKey: string, serial: string, customSystemInstruction?: string): void {

@@ -5,7 +5,8 @@ import {
   Smartphone, Bot, Mic, RefreshCw, Send, Play, Square, 
   Camera, AlertCircle, Cpu, Sparkles, Check, 
   ChevronDown, PhoneOff, List, Circle, ArrowLeft,
-  Sun, Moon, Laptop, MessageSquare
+  MessageSquare, Settings, X, Shield,
+  Languages, Key, Eye, EyeOff, Save
 } from 'lucide-react';
 
 import { ScrcpyAudioQueue } from './renderer/services/scrcpy-audio-queue';
@@ -43,7 +44,16 @@ export function App() {
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light' | 'system') || 'system';
   });
-  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+  
+  // App Settings State
+  const [settings, setSettings] = useState<any>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [localSettings, setLocalSettings] = useState<any>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  
+  // Real OS-level Microphone permission state
+  const [micPermissionStatus, setMicPermissionStatus] = useState<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>('unknown');
   
   // Agent Panel Show/Hide State
   const [showWorkspace, setShowWorkspace] = useState(true);
@@ -56,6 +66,23 @@ export function App() {
   const [scrcpyStatus, setScrcpyStatus] = useState<string>('Disconnected');
   const [scrcpyError, setScrcpyError] = useState<string | null>(null);
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
+
+  // Load configuration from Electron on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const res = await (window as any).adb.getSettings();
+        if (res) {
+          setSettings(res);
+          setTheme(res.theme);
+          geminiLiveService.setModel(res.geminiLiveModel);
+        }
+      } catch (e) {
+        console.error('[Renderer] Error loading settings:', e);
+      }
+    };
+    loadConfig();
+  }, []);
 
   // Synchronize theme with local storage, document.documentElement, and Electron nativeTheme
   useEffect(() => {
@@ -95,6 +122,85 @@ export function App() {
       if (unsubscribe) unsubscribe();
     };
   }, [theme]);
+
+  const fetchMicPermissionStatus = useCallback(async () => {
+    try {
+      const status = await (window as any).adb.getMicrophoneStatus();
+      setMicPermissionStatus(status);
+    } catch (err) {
+      console.error('[Renderer] Error fetching microphone status:', err);
+    }
+  }, []);
+
+  // Sync settings state to local state and fetch OS microphone status when modal opens
+  useEffect(() => {
+    if (showSettings && settings) {
+      setLocalSettings(JSON.parse(JSON.stringify(settings)));
+      fetchMicPermissionStatus();
+
+      // Listen for window focus to refresh permission status when user returns from system settings
+      const handleWindowFocus = () => {
+        fetchMicPermissionStatus();
+      };
+      window.addEventListener('focus', handleWindowFocus);
+
+      // Also set a polling interval when modal is open to refresh status automatically
+      const intervalId = setInterval(() => {
+        fetchMicPermissionStatus();
+      }, 2000);
+
+      return () => {
+        window.removeEventListener('focus', handleWindowFocus);
+        clearInterval(intervalId);
+      };
+    }
+  }, [showSettings, settings, fetchMicPermissionStatus]);
+
+  const handleRequestMicPermission = async () => {
+    try {
+      const status = await (window as any).adb.requestMicrophone();
+      setMicPermissionStatus(status);
+    } catch (err) {
+      console.error('[Renderer] Error requesting microphone permission:', err);
+    }
+  };
+
+  const handleOpenSystemSettings = async () => {
+    try {
+      await (window as any).adb.openSystemSettings();
+    } catch (err) {
+      console.error('[Renderer] Error opening system settings:', err);
+    }
+  };
+
+  // Save Settings from modal securely to Electron config-manager
+  const handleSaveSettings = async () => {
+    if (!localSettings) return;
+    setSaveStatus('saving');
+    try {
+      const res = await (window as any).adb.saveSettings(localSettings);
+      if (res && res.success) {
+        setSettings(res.settings);
+        setTheme(res.settings.theme);
+        
+        // Dynamically notify geminiLiveService of its model choice
+        geminiLiveService.setModel(res.settings.geminiLiveModel);
+
+        setSaveStatus('saved');
+        setTimeout(() => {
+          setSaveStatus('idle');
+          setShowSettings(false);
+        }, 1000);
+      } else {
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      }
+    } catch (err) {
+      console.error('[Renderer] Error saving settings:', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }
+  };
 
   // Layout & Workspace Toggles
 
@@ -669,71 +775,14 @@ INSTRUCTION FOR TAKE-OVER:
             <MessageSquare className="w-4 h-4" />
           </button>
 
-          {/* Theme Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
-              className="flex items-center justify-center p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"
-              title="切换主题"
-            >
-              {theme === 'light' && <Sun className="w-4 h-4" />}
-              {theme === 'dark' && <Moon className="w-4 h-4" />}
-              {theme === 'system' && <Laptop className="w-4 h-4" />}
-            </button>
-
-            {themeDropdownOpen && (
-              <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setThemeDropdownOpen(false)}
-                />
-                <div className="absolute right-0 mt-1 w-32 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-1 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <button
-                    onClick={() => {
-                      setTheme('light');
-                      setThemeDropdownOpen(false);
-                    }}
-                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                      theme === 'light'
-                        ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100'
-                    }`}
-                  >
-                    <Sun className="w-3.5 h-3.5" />
-                    <span>浅色模式</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTheme('dark');
-                      setThemeDropdownOpen(false);
-                    }}
-                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                      theme === 'dark'
-                        ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100'
-                    }`}
-                  >
-                    <Moon className="w-3.5 h-3.5" />
-                    <span>深色模式</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTheme('system');
-                      setThemeDropdownOpen(false);
-                    }}
-                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                      theme === 'system'
-                        ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100'
-                    }`}
-                  >
-                    <Laptop className="w-3.5 h-3.5" />
-                    <span>系统默认</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Settings Button */}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center justify-center p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"
+            title="偏好设置"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -936,7 +985,7 @@ INSTRUCTION FOR TAKE-OVER:
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">实时语音通话</span>
                       <span className="text-xxs text-zinc-500 dark:text-zinc-500 mt-0.5">
-                        {agentRunning ? 'Agent 运行中 - 拨入可实时接管' : '拨入开始音视频协同控制'}
+                        连接语音助手
                       </span>
                     </div>
                   </div>
@@ -1064,24 +1113,24 @@ INSTRUCTION FOR TAKE-OVER:
             </div>
 
             {/* 3. BOTTOM PANEL: Controls & Input Panel */}
-            <div className="space-y-4 shrink-0 bg-zinc-100/30 dark:bg-zinc-900/30 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-900 transition-colors duration-200">
+            <div className="shrink-0">
               {/* Task / Chat Text input */}
               <div className="relative">
                 {geminiStatus === 'connected' ? (
                   /* If live voice call is connected, show text chat input to Gemini */
-                  <div className="flex items-center gap-2 p-1.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm">
                     <input
                       type="text"
                       value={geminiChatInput}
                       onChange={(e) => setGeminiChatInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSendLiveChatText(); }}
                       placeholder="发送文本指令给实时语音助手..."
-                      className="flex-1 bg-transparent border-none focus:outline-none text-xs text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 px-2 py-2"
+                      className="flex-1 bg-transparent border-none focus:outline-none text-xs text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 px-3 py-3"
                     />
                     <button
                       onClick={handleSendLiveChatText}
                       disabled={!geminiChatInput.trim()}
-                      className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow disabled:opacity-30 transition-all shrink-0 active:scale-95 cursor-pointer"
+                      className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow disabled:opacity-30 transition-all shrink-0 active:scale-95 cursor-pointer mr-1"
                     >
                       <Send className="w-3.5 h-3.5 fill-white text-transparent" />
                     </button>
@@ -1094,16 +1143,16 @@ INSTRUCTION FOR TAKE-OVER:
                       onChange={(e) => setAgentInput(e.target.value)}
                       placeholder="给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)"
                       disabled={agentRunning || !activeSerial}
-                      className="w-full h-20 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-300 dark:focus:border-zinc-700 rounded-xl p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors shadow-sm dark:shadow-none"
+                      className="w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors shadow-sm dark:shadow-none"
                     />
                     
                     {/* Run / Stop buttons */}
-                    <div className="absolute bottom-3 right-3">
+                    <div className="absolute bottom-4 right-4">
                       {!agentRunning ? (
                         <button
                           onClick={handleStartAgent}
                           disabled={!agentInput.trim() || !activeSerial}
-                          className="flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
+                          className="flex items-center justify-center p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
                           title="发送任务指令"
                         >
                           <Send className="w-3.5 h-3.5 fill-white text-transparent" />
@@ -1111,7 +1160,7 @@ INSTRUCTION FOR TAKE-OVER:
                       ) : (
                         <button
                           onClick={handleGlobalStop}
-                          className="flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow transition-all active:scale-95 animate-pulse cursor-pointer"
+                          className="flex items-center justify-center p-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow transition-all active:scale-95 animate-pulse cursor-pointer"
                           title="紧急停止 Agent 与通话"
                         >
                           <Square className="w-3.5 h-3.5 fill-white text-transparent" />
@@ -1125,6 +1174,221 @@ INSTRUCTION FOR TAKE-OVER:
           </div>
         )}
       </div>
+
+      {/* Settings Modal Overlay */}
+      {showSettings && localSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-zinc-800 dark:text-zinc-100 animate-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-500 animate-spin-slow" />
+                <h3 className="font-bold text-sm tracking-wide">偏好设置 (PREFERENCES)</h3>
+              </div>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {/* Section 1: API & Model */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
+                  <Key className="w-3.5 h-3.5" />
+                  <span>API 与模型配置 (GEMINI API)</span>
+                </h4>
+                
+                {/* Gemini API Key */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">Gemini 密钥</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={localSettings.geminiApiKey || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, geminiApiKey: e.target.value })}
+                      placeholder="输入您的 Gemini API 密钥..."
+                      className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 pr-10 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                    * 秘钥保存在本地安全的 UserData 路径，仅用于调用官方 Gemini Live 与 ADK Agent 服务。
+                  </p>
+                </div>
+
+                {/* HTTP Proxy Configuration */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">HTTP 代理配置 (选填)</label>
+                  <input
+                    type="text"
+                    value={localSettings.proxy || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, proxy: e.target.value })}
+                    placeholder="例如: http://127.0.0.1:7890 (不填则默认使用系统/环境变量代理)"
+                    className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                  />
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                    * 在中国大陆地区，设置本地代理服务器可确保稳定连接 Google Gemini。修改代理后，建议重启应用完全生效。
+                  </p>
+                </div>
+
+                {/* Models Configuration */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">实时语音模型 (Live Call)</label>
+                    <select
+                      value={localSettings.geminiLiveModel || 'models/gemini-3.1-flash-live-preview'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, geminiLiveModel: e.target.value })}
+                      className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
+                    >
+                      <option value="models/gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+                      <option value="models/gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">智能体模型 (Vision Agent)</label>
+                    <select
+                      value={localSettings.visionAgentModel || 'gemini-3-flash-preview'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, visionAgentModel: e.target.value })}
+                      className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
+                    >
+                      <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                      <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Appearance & Lang */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
+                  <Languages className="w-3.5 h-3.5" />
+                  <span>常规与显示</span>
+                </h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Theme */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">系统主题</label>
+                    <select
+                      value={localSettings.theme || 'system'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, theme: e.target.value as any })}
+                      className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
+                    >
+                      <option value="light">浅色模式</option>
+                      <option value="dark">深色模式</option>
+                      <option value="system">系统默认</option>
+                    </select>
+                  </div>
+                  {/* Language */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">界面语言</label>
+                    <select
+                      value={localSettings.language || 'zh'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, language: e.target.value as any })}
+                      className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
+                    >
+                      <option value="zh">简体中文</option>
+                      <option value="en">English (暂未支持)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Permissions */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>系统安全与权限</span>
+                </h4>
+
+                <div className="space-y-3">
+                  {/* Microphone Permission Info */}
+                  <div className="flex items-center justify-between p-3.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 rounded-xl">
+                    <div className="flex flex-col min-w-0 pr-3">
+                      <span className="text-xs font-bold">麦克风权限</span>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-relaxed">
+                        允许 App 访问系统麦克风。此权限为实时双向语音通话的必需权限。
+                      </span>
+                    </div>
+
+                    <div className="shrink-0">
+                      {/* Authorized state */}
+                      {micPermissionStatus === 'granted' && (
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                          已授权
+                        </span>
+                      )}
+
+                      {/* Not determined state (Never asked before) */}
+                      {micPermissionStatus === 'not-determined' && (
+                        <button
+                          onClick={handleRequestMicPermission}
+                          className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+                        >
+                          请求授权
+                        </button>
+                      )}
+
+                      {/* Denied or Restricted state */}
+                      {(micPermissionStatus === 'denied' || micPermissionStatus === 'restricted') && (
+                        <button
+                          onClick={handleOpenSystemSettings}
+                          className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+                        >
+                          去授权
+                        </button>
+                      )}
+
+                      {/* Unknown state fallback */}
+                      {micPermissionStatus === 'unknown' && (
+                        <button
+                          onClick={handleOpenSystemSettings}
+                          className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+                        >
+                          去授权
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 shrink-0">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={saveStatus === 'saving'}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-md transition-colors cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {saveStatus === 'saving' && '正在保存...'}
+                {saveStatus === 'saved' && '保存成功 ✓'}
+                {saveStatus === 'error' && '保存失败 ✗'}
+                {saveStatus === 'idle' && '保存设置'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { scrcpyManager } from './scrcpy-manager';
 import { ToolRegistry } from './agent/tool-registry';
 import { AgentLoop } from './agent/agent-loop';
 import { AgentContext } from './agent/types';
+import { ConfigManager } from './config-manager';
 
 function truncateBase64AndThought(str: string): string {
   if (typeof str !== 'string') return str;
@@ -73,13 +74,15 @@ export class VisionAgent implements AgentContext {
     if (this.agent) return;
     this.log('status', 'Initializing ADK Agent...');
     try {
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      const settings = ConfigManager.loadSettings();
+      const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
       if (!apiKey) {
-        throw new Error('Missing GEMINI_API_KEY or GOOGLE_API_KEY in environment/.env');
+        throw new Error('Missing GEMINI_API_KEY or GOOGLE_API_KEY in configuration/environment/.env');
       }
-      if (!process.env.GOOGLE_API_KEY) {
-        process.env.GOOGLE_API_KEY = apiKey;
-      }
+
+      // Update environment variables so @google/adk is synchronized
+      process.env.GOOGLE_API_KEY = apiKey;
+      process.env.GEMINI_API_KEY = apiKey;
 
       const { LlmAgent, setLogger } = await import('@google/adk');
       setLogger(new CustomAdkLogger());
@@ -87,9 +90,11 @@ export class VisionAgent implements AgentContext {
       const registry = new ToolRegistry(this);
       const tools = registry.getTools();
 
+      const modelName = settings.visionAgentModel || 'gemini-3-flash-preview';
+
       this.agent = new LlmAgent({
         name: 'VisionMobileAgent',
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         instruction: `You are a strategic autonomous Vision Agent.
         
 COORDINATE SYSTEM:

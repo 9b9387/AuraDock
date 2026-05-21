@@ -41,4 +41,9 @@ contextBridge.exposeInMainWorld("adb", {
     ipcRenderer.on("dark-mode:updated", listener);
     return () => ipcRenderer.removeListener("dark-mode:updated", listener);
   },
+  getSettings: () => ipcRenderer.invoke("settings:get"),
+  saveSettings: (settings: any) => ipcRenderer.invoke("settings:save", settings),
+  getMicrophoneStatus: () => ipcRenderer.invoke("permission:get-microphone-status"),
+  requestMicrophone: () => ipcRenderer.invoke("permission:request-microphone"),
+  openSystemSettings: () => ipcRenderer.invoke("permission:open-system-settings"),
 });

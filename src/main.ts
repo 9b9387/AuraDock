@@ -20,12 +20,25 @@ if (existsSync('.env')) {
 }
 
 // Setup Proxy for ADK/GenAI fetch
-const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+let proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+try {
+  const settings = ConfigManager.loadSettings();
+  if (settings && settings.proxy) {
+    proxyUrl = settings.proxy;
+  }
+} catch (err) {
+  console.error('[Main] Failed to load settings for proxy:', err);
+}
+
 if (proxyUrl) {
   try {
     const proxyAgent = new ProxyAgent(proxyUrl);
     setGlobalDispatcher(proxyAgent);
     console.log(`[Main] Global proxy set to: ${proxyUrl}`);
+    
+    // Set proxy for Electron/Chromium renderer network stack (WebSockets, fetch)
+    app.commandLine.appendSwitch('proxy-server', proxyUrl);
+    console.log(`[Main] Chromium proxy-server configured: ${proxyUrl}`);
   } catch (e) {
     console.error('[Main] Failed to set global proxy:', e);
   }
@@ -43,6 +56,8 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 900,
+    minHeight: 600,
     titleBarStyle: 'hidden',
     titleBarOverlay: process.platform !== 'darwin' ? {
       color: isDark ? '#09090b' : '#ffffff',
@@ -73,6 +88,10 @@ const createWindow = () => {
 app.on('ready', () => {
   // Setup Config handlers
   ConfigManager.setupHandlers();
+
+  // Load and apply initial settings (like theme)
+  const initialSettings = ConfigManager.loadSettings();
+  nativeTheme.themeSource = initialSettings.theme;
 
   // Setup Scrcpy handlers once at startup
   scrcpyManager.setupHandlers();
