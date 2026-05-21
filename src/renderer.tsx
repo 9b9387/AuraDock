@@ -144,14 +144,6 @@ export function App() {
         ...prev,
         { type: log.type, message: log.message, timestamp: Date.now() }
       ]);
-      if (
-        log.message.includes('stopped') || 
-        log.message.includes('successfully') || 
-        log.message.includes('max turns') || 
-        log.message.includes('Error')
-      ) {
-        setAgentRunning(false);
-      }
     };
 
     const handleScreenshotRequest = () => {
@@ -161,8 +153,17 @@ export function App() {
       (window as any).adb.sendScreenshot(base64);
     };
 
+    const unsubscribeStatus = (window as any).adb.onAgentStatusChange((status: { running: boolean }) => {
+      console.log('[Renderer] Agent status changed:', status);
+      setAgentRunning(status.running);
+    });
+
     (window as any).adb.onAgentLog(handleLog);
     (window as any).adb.onScreenshotRequest(handleScreenshotRequest);
+
+    return () => {
+      if (unsubscribeStatus) unsubscribeStatus();
+    };
   }, []);
 
   // Initialize Video Decoder
@@ -738,12 +739,7 @@ INSTRUCTION FOR TAKE-OVER:
 
         {/* Custom Android Navigation Control Bar */}
         {activeSerial && (
-          <div className="mt-4 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800/80 z-10 shrink-0">
-            {/* Resolution Left */}
-            <span className="text-xxs font-semibold text-zinc-500">
-              {videoWidthRef.current > 0 ? `分辨率 ${videoWidthRef.current}x${videoHeightRef.current}` : '分辨率 -'}
-            </span>
-
+          <div className="mt-4 flex items-center justify-center px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800/80 z-10 shrink-0">
             {/* Navigation Keys Middle */}
             <div className="flex items-center gap-8">
               <button 
@@ -771,11 +767,6 @@ INSTRUCTION FOR TAKE-OVER:
                 <List className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Frame rate Right */}
-            <span className="text-xxs font-semibold text-zinc-500">
-              帧率 60fps
-            </span>
           </div>
         )}
       </div>

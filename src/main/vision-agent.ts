@@ -4,11 +4,59 @@ import { ToolRegistry } from './agent/tool-registry';
 import { AgentLoop } from './agent/agent-loop';
 import { AgentContext } from './agent/types';
 
-function truncateBase64(str: string): string {
+function truncateBase64AndThought(str: string): string {
   if (typeof str !== 'string') return str;
-  return str.replace(/([a-zA-Z0-9+/=]{200,})/g, (match) => {
-    return `${match.substring(0, 50)}... [truncated ${match.length} chars]`;
+  let clean = str;
+  // Truncate Base64 (images/screenshots/etc.) down to 20 characters
+  clean = clean.replace(/([a-zA-Z0-9+/=]{100,})/g, (match) => {
+    return `${match.substring(0, 20)}... [truncated ${match.length} chars]`;
   });
+  // Truncate thoughtSignature down to 20 characters
+  clean = clean.replace(/(["']?thoughtSignature["']?\s*:\s*["'])([^"'\\]+)(["'])/gi, (match, prefix, signature, suffix) => {
+    if (signature.length <= 20) return match;
+    return `${prefix}${signature.substring(0, 20)}... [truncated ${signature.length} chars]${suffix}`;
+  });
+  return clean;
+}
+
+class CustomAdkLogger {
+  private logLevel = 1; // LogLevel.INFO
+
+  setLogLevel(level: number) {
+    this.logLevel = level;
+  }
+
+  log(level: number, ...args: any[]) {
+    if (this.logLevel > level) return;
+    const cleanArgs = args.map(arg => {
+      if (typeof arg === 'string') {
+        return truncateBase64AndThought(arg);
+      }
+      try {
+        return truncateBase64AndThought(JSON.stringify(arg));
+      } catch (e) {
+        return String(arg);
+      }
+    });
+    const prefix = level === 0 ? 'DEBUG' : level === 1 ? 'INFO' : level === 2 ? 'WARN' : 'ERROR';
+    console.log(`${prefix}: [ADK] ${new Date().toISOString()} ${cleanArgs.join(' ')}`);
+  }
+
+  debug(...args: any[]) {
+    this.log(0, ...args);
+  }
+
+  info(...args: any[]) {
+    this.log(1, ...args);
+  }
+
+  warn(...args: any[]) {
+    this.log(2, ...args);
+  }
+
+  error(...args: any[]) {
+    this.log(3, ...args);
+  }
 }
 
 export class VisionAgent implements AgentContext {
@@ -33,7 +81,8 @@ export class VisionAgent implements AgentContext {
         process.env.GOOGLE_API_KEY = apiKey;
       }
 
-      const { LlmAgent } = await import('@google/adk');
+      const { LlmAgent, setLogger } = await import('@google/adk');
+      setLogger(new CustomAdkLogger());
       
       const registry = new ToolRegistry(this);
       const tools = registry.getTools();
@@ -63,6 +112,13 @@ TASK COMPLETION:
     }
   }
 
+  private notifyStatus(running: boolean) {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      win.webContents.send('agent:status-change', { running });
+    }
+  }
+
   private setupIpc() {
     ipcMain.on('agent:start', async (event, task) => {
       this.currentSerial = this.findActiveSerial();
@@ -76,9 +132,12 @@ TASK COMPLETION:
       try {
         await this.ensureAgent();
         if (!this.loop) throw new Error('Agent failed to initialize');
+        this.notifyStatus(true);
         await this.loop.run(task);
       } catch (e: any) {
         this.log('status', `Agent Error: ${e.message}`);
+      } finally {
+        this.notifyStatus(false);
       }
     });
 
@@ -167,7 +226,7 @@ TASK COMPLETION:
 
   log(type: 'thought' | 'action' | 'status', message: string) {
     const win = BrowserWindow.getAllWindows()[0];
-    const cleanMessage = truncateBase64(message);
+    const cleanMessage = truncateBase64AndThought(message);
     if (win) {
       win.webContents.send('agent:log', { type, message: cleanMessage });
     }

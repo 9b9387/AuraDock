@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld("adb", {
   onAgentLog: (callback: (log: any) => void) => {
     ipcRenderer.on("agent:log", (_event, log) => callback(log));
   },
+  onAgentStatusChange: (callback: (status: { running: boolean }) => void) => {
+    const listener = (_event: any, status: { running: boolean }) => callback(status);
+    ipcRenderer.on("agent:status-change", listener);
+    return () => ipcRenderer.removeListener("agent:status-change", listener);
+  },
   startAgent: (task: string) => ipcRenderer.send("agent:start", task),
   stopAgent: () => ipcRenderer.send("agent:stop"),
   pauseAgent: () => ipcRenderer.send("agent:pause"),

@@ -188,7 +188,15 @@ export class AgentLoop {
       if (!this.isRunning) break;
       await new Promise(r => setTimeout(r, 1000));
     }
+    const wasRunning = this.isRunning;
     this.isRunning = false;
+    if (wasRunning) {
+      if (cycleCount >= this.maxCycles) {
+        this.context.log('status', 'Agent stopped: max turns reached.');
+      } else {
+        this.context.log('status', 'Agent task completed successfully.');
+      }
+    }
   }
 
   stop() {

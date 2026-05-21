@@ -6,11 +6,19 @@ export interface GeminiLiveServiceOptions {
   systemInstruction?: string;
 }
 
-function truncateBase64(str: string): string {
+function truncateBase64AndThought(str: string): string {
   if (typeof str !== 'string') return str;
-  return str.replace(/([a-zA-Z0-9+/=]{200,})/g, (match) => {
-    return `${match.substring(0, 50)}... [truncated ${match.length} chars]`;
+  let clean = str;
+  // Truncate Base64 (images/screenshots/etc.) down to 20 characters
+  clean = clean.replace(/([a-zA-Z0-9+/=]{100,})/g, (match) => {
+    return `${match.substring(0, 20)}... [truncated ${match.length} chars]`;
   });
+  // Truncate thoughtSignature down to 20 characters
+  clean = clean.replace(/(["']?thoughtSignature["']?\s*:\s*["'])([^"'\\]+)(["'])/gi, (match, prefix, signature, suffix) => {
+    if (signature.length <= 20) return match;
+    return `${prefix}${signature.substring(0, 20)}... [truncated ${signature.length} chars]${suffix}`;
+  });
+  return clean;
 }
 
 export class GeminiLiveService {
@@ -196,7 +204,7 @@ export class GeminiLiveService {
    * Helper: Send Logger event.
    */
   private log(type: 'thought' | 'action' | 'status', message: string): void {
-    const cleanMessage = truncateBase64(message);
+    const cleanMessage = truncateBase64AndThought(message);
     if (this.onLogMessage) {
       this.onLogMessage(type, cleanMessage);
     }
