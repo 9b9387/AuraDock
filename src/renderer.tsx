@@ -5,7 +5,7 @@ import {
   Smartphone, Bot, Mic, RefreshCw, Send, Play, Square, 
   Camera, AlertCircle, Cpu, Sparkles, Check, 
   ChevronDown, PhoneOff, List, Circle, ArrowLeft,
-  Sun, Moon, Laptop
+  Sun, Moon, Laptop, MessageSquare
 } from 'lucide-react';
 
 import { ScrcpyAudioQueue } from './renderer/services/scrcpy-audio-queue';
@@ -44,6 +44,9 @@ export function App() {
     return (localStorage.getItem('theme') as 'dark' | 'light' | 'system') || 'system';
   });
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+  
+  // Agent Panel Show/Hide State
+  const [showWorkspace, setShowWorkspace] = useState(true);
 
   // Device Selection & Connection State
   const [devices, setDevices] = useState<AdbDeviceInfo[]>([]);
@@ -650,9 +653,22 @@ INSTRUCTION FOR TAKE-OVER:
 
         {/* Action controls (No-drag) */}
         <div 
-          className={`flex items-center gap-2 ${!isMac ? 'pr-[140px]' : ''}`}
+          className={`flex items-center gap-1.5 ${!isMac ? 'pr-[140px]' : ''}`}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
+          {/* Workspace Toggle Button */}
+          <button
+            onClick={() => setShowWorkspace(!showWorkspace)}
+            className={`flex items-center justify-center p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer ${
+              showWorkspace 
+                ? 'bg-zinc-100 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700/80' 
+                : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-100'
+            }`}
+            title={showWorkspace ? "隐藏智能协作空间" : "显示智能协作空间"}
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+
           {/* Theme Selector */}
           <div className="relative">
             <button
@@ -898,214 +914,216 @@ INSTRUCTION FOR TAKE-OVER:
         </div>
 
         {/* RIGHT PANEL: Integrated Unified Workspace (Vision Agent + Gemini Live Call) */}
-        <div className="flex flex-col flex-[2] bg-zinc-50 dark:bg-zinc-950 p-4 h-full min-w-[380px] max-w-[480px] transition-colors duration-200">
-          
-          {/* Workspace header */}
-          <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-900 pb-3 mb-4 shrink-0">
-            <Sparkles className="w-4.5 h-4.5 text-blue-400" />
-            <h2 className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作空间 (WORKSPACE)</h2>
-            {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-auto"></span>}
-          </div>
+        {showWorkspace && (
+          <div className="flex flex-col flex-[2] bg-zinc-50 dark:bg-zinc-950 p-4 h-full min-w-[380px] max-w-[480px] transition-colors duration-200">
+            
+            {/* Workspace header */}
+            <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-900 pb-3 mb-4 shrink-0">
+              <Sparkles className="w-4.5 h-4.5 text-blue-400" />
+              <h2 className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作空间 (WORKSPACE)</h2>
+              {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-auto"></span>}
+            </div>
 
-          {/* 1. TOP WIDGET: Real-time Voice Call Controller */}
-          <div className="mb-4 shrink-0">
-            {geminiStatus === 'disconnected' || geminiStatus === 'error' ? (
-              /* DISCONNECTED COMPACT BANNER */
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/25 shadow-sm dark:shadow-none">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    <Mic className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">实时语音通话</span>
-                    <span className="text-xxs text-zinc-500 dark:text-zinc-500 mt-0.5">
-                      {agentRunning ? 'Agent 运行中 - 拨入可实时接管' : '拨入开始音视频协同控制'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={handleStartLiveCall}
-                  disabled={!activeSerial}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white font-bold text-xs shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
-                >
-                  <Play className="w-3 h-3 fill-white" />
-                  <span>开启语音</span>
-                </button>
-              </div>
-            ) : (
-              /* CONNECTED SOUND WAVES AND PHONE OFF */
-              <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-3 flex items-center justify-between relative overflow-hidden shadow-sm dark:shadow-none">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span className="text-xxs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                    {geminiStatus === 'connecting' ? '连接中...' : '通话中'}
-                  </span>
-                </div>
-
-                {/* Sound Wave bars */}
-                <div className="h-8 flex items-end justify-center gap-1 w-32 shrink-0">
-                  {waveBars.map((height, i) => (
-                    <div 
-                      key={i} 
-                      style={{ height: `${height}%` }}
-                      className="w-1 bg-emerald-500 rounded-full transition-all duration-100 wave-bar shrink-0"
-                    />
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleStopLiveCall}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
-                >
-                  <PhoneOff className="w-3.5 h-3.5" />
-                  <span>挂断</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 2. MIDDLE SECTION: Unified Chronological Log Feed */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 rounded-2xl p-4 mb-4 space-y-3 min-h-[250px] shadow-inner">
-            {unifiedLogs.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                <Bot className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-3" />
-                <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400">等待接收任务指令</p>
-                <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1">在下方输入框描述你的任务目标并运行</p>
-              </div>
-            ) : (
-              unifiedLogs.map((log, index) => {
-                // Decide if it is a Chat/Speech bubble or an Agent thought/action card
-                const isUserSpeech = log.message.startsWith('You:');
-                const isGeminiSpeech = log.message.startsWith('Gemini:');
-
-                if (isUserSpeech || isGeminiSpeech) {
-                  const displayText = log.message.replace(/^(Gemini:|You:)/, '').trim();
-                  return (
-                    <div 
-                      key={index} 
-                      className={`flex ${isGeminiSpeech ? 'justify-start' : 'justify-end'} animate-in fade-in duration-150`}
-                    >
-                      <div className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed ${
-                        isGeminiSpeech 
-                          ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800/40 rounded-tl-none' 
-                          : 'bg-emerald-600 text-white rounded-tr-none font-semibold shadow-md'
-                      }`}>
-                        <p>{displayText}</p>
-                        <span className="block text-[9px] text-zinc-400 dark:text-zinc-500 text-right mt-1 font-mono opacity-60">
-                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                        </span>
-                      </div>
+            {/* 1. TOP WIDGET: Real-time Voice Call Controller */}
+            <div className="mb-4 shrink-0">
+              {geminiStatus === 'disconnected' || geminiStatus === 'error' ? (
+                /* DISCONNECTED COMPACT BANNER */
+                <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/25 shadow-sm dark:shadow-none">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      <Mic className="w-4 h-4" />
                     </div>
-                  );
-                }
-
-                // Otherwise it's an Agent thought, action, or status log card
-                let badgeColor = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400';
-                let icon = <Cpu className="w-3.5 h-3.5" />;
-                let cardBg = 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800/40';
-                let textColor = 'text-zinc-700 dark:text-zinc-300';
-
-                if (log.type === 'thought') {
-                  badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/10';
-                  icon = <Sparkles className="w-3.5 h-3.5" />;
-                  cardBg = 'bg-blue-500/[0.02] border-blue-500/10';
-                  textColor = 'text-blue-800 dark:text-blue-200';
-                } else if (log.type === 'action') {
-                  badgeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10';
-                  icon = <Play className="w-3.5 h-3.5" />;
-                  cardBg = 'bg-amber-500/[0.02] border-amber-500/10';
-                  textColor = 'text-amber-800 dark:text-amber-200';
-                } else if (log.type === 'status') {
-                  badgeColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10';
-                  icon = <Check className="w-3.5 h-3.5" />;
-                  cardBg = 'bg-emerald-500/[0.02] border-emerald-500/10';
-                  textColor = 'text-emerald-800 dark:text-emerald-200';
-                }
-
-                return (
-                  <div 
-                    key={index}
-                    className={`p-3 rounded-xl border ${cardBg} space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`flex items-center gap-1 text-xxs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${badgeColor}`}>
-                        {icon}
-                        {log.type}
-                      </span>
-                      <span className="text-xxs text-zinc-400 dark:text-zinc-600 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">实时语音通话</span>
+                      <span className="text-xxs text-zinc-500 dark:text-zinc-500 mt-0.5">
+                        {agentRunning ? 'Agent 运行中 - 拨入可实时接管' : '拨入开始音视频协同控制'}
                       </span>
                     </div>
-                    <p className={`text-xs leading-relaxed font-sans ${textColor}`}>
-                      {log.message}
-                    </p>
                   </div>
-                );
-              })
-            )}
-            <div ref={unifiedLogEndRef} />
-          </div>
-
-          {/* 3. BOTTOM PANEL: Controls & Input Panel */}
-          <div className="space-y-4 shrink-0 bg-zinc-100/30 dark:bg-zinc-900/30 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-900 transition-colors duration-200">
-            {/* Task / Chat Text input */}
-            <div className="relative">
-              {geminiStatus === 'connected' ? (
-                /* If live voice call is connected, show text chat input to Gemini */
-                <div className="flex items-center gap-2 p-1.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <input
-                    type="text"
-                    value={geminiChatInput}
-                    onChange={(e) => setGeminiChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSendLiveChatText(); }}
-                    placeholder="发送文本指令给实时语音助手..."
-                    className="flex-1 bg-transparent border-none focus:outline-none text-xs text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 px-2 py-2"
-                  />
                   <button
-                    onClick={handleSendLiveChatText}
-                    disabled={!geminiChatInput.trim()}
-                    className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow disabled:opacity-30 transition-all shrink-0 active:scale-95 cursor-pointer"
+                    onClick={handleStartLiveCall}
+                    disabled={!activeSerial}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white font-bold text-xs shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
                   >
-                    <Send className="w-3.5 h-3.5 fill-white text-transparent" />
+                    <Play className="w-3 h-3 fill-white" />
+                    <span>开启语音</span>
                   </button>
                 </div>
               ) : (
-                /* Otherwise, show main Agent task textarea */
-                <>
-                  <textarea
-                    value={agentInput}
-                    onChange={(e) => setAgentInput(e.target.value)}
-                    placeholder="给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)"
-                    disabled={agentRunning || !activeSerial}
-                    className="w-full h-20 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-300 dark:focus:border-zinc-700 rounded-xl p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors shadow-sm dark:shadow-none"
-                  />
-                  
-                  {/* Run / Stop buttons */}
-                  <div className="absolute bottom-3 right-3">
-                    {!agentRunning ? (
-                      <button
-                        onClick={handleStartAgent}
-                        disabled={!agentInput.trim() || !activeSerial}
-                        className="flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
-                        title="发送任务指令"
-                      >
-                        <Send className="w-3.5 h-3.5 fill-white text-transparent" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleGlobalStop}
-                        className="flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow transition-all active:scale-95 animate-pulse cursor-pointer"
-                        title="紧急停止 Agent 与通话"
-                      >
-                        <Square className="w-3.5 h-3.5 fill-white text-transparent" />
-                      </button>
-                    )}
+                /* CONNECTED SOUND WAVES AND PHONE OFF */
+                <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-3 flex items-center justify-between relative overflow-hidden shadow-sm dark:shadow-none">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span className="text-xxs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      {geminiStatus === 'connecting' ? '连接中...' : '通话中'}
+                    </span>
                   </div>
-                </>
+
+                  {/* Sound Wave bars */}
+                  <div className="h-8 flex items-end justify-center gap-1 w-32 shrink-0">
+                    {waveBars.map((height, i) => (
+                      <div 
+                        key={i} 
+                        style={{ height: `${height}%` }}
+                        className="w-1 bg-emerald-500 rounded-full transition-all duration-100 wave-bar shrink-0"
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleStopLiveCall}
+                    className="flex items-center gap-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+                  >
+                    <PhoneOff className="w-3.5 h-3.5" />
+                    <span>挂断</span>
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* 2. MIDDLE SECTION: Unified Chronological Log Feed */}
+            <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 rounded-2xl p-4 mb-4 space-y-3 min-h-[250px] shadow-inner">
+              {unifiedLogs.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                  <Bot className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-3" />
+                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400">等待接收任务指令</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1">在下方输入框描述你的任务目标并运行</p>
+                </div>
+              ) : (
+                unifiedLogs.map((log, index) => {
+                  // Decide if it is a Chat/Speech bubble or an Agent thought/action card
+                  const isUserSpeech = log.message.startsWith('You:');
+                  const isGeminiSpeech = log.message.startsWith('Gemini:');
+
+                  if (isUserSpeech || isGeminiSpeech) {
+                    const displayText = log.message.replace(/^(Gemini:|You:)/, '').trim();
+                    return (
+                      <div 
+                        key={index} 
+                        className={`flex ${isGeminiSpeech ? 'justify-start' : 'justify-end'} animate-in fade-in duration-150`}
+                      >
+                        <div className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed ${
+                          isGeminiSpeech 
+                            ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800/40 rounded-tl-none' 
+                            : 'bg-emerald-600 text-white rounded-tr-none font-semibold shadow-md'
+                        }`}>
+                          <p>{displayText}</p>
+                          <span className="block text-[9px] text-zinc-400 dark:text-zinc-500 text-right mt-1 font-mono opacity-60">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Otherwise it's an Agent thought, action, or status log card
+                  let badgeColor = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400';
+                  let icon = <Cpu className="w-3.5 h-3.5" />;
+                  let cardBg = 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800/40';
+                  let textColor = 'text-zinc-700 dark:text-zinc-300';
+
+                  if (log.type === 'thought') {
+                    badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/10';
+                    icon = <Sparkles className="w-3.5 h-3.5" />;
+                    cardBg = 'bg-blue-500/[0.02] border-blue-500/10';
+                    textColor = 'text-blue-800 dark:text-blue-200';
+                  } else if (log.type === 'action') {
+                    badgeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10';
+                    icon = <Play className="w-3.5 h-3.5" />;
+                    cardBg = 'bg-amber-500/[0.02] border-amber-500/10';
+                    textColor = 'text-amber-800 dark:text-amber-200';
+                  } else if (log.type === 'status') {
+                    badgeColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10';
+                    icon = <Check className="w-3.5 h-3.5" />;
+                    cardBg = 'bg-emerald-500/[0.02] border-emerald-500/10';
+                    textColor = 'text-emerald-800 dark:text-emerald-200';
+                  }
+
+                  return (
+                    <div 
+                      key={index}
+                      className={`p-3 rounded-xl border ${cardBg} space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`flex items-center gap-1 text-xxs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${badgeColor}`}>
+                          {icon}
+                          {log.type}
+                        </span>
+                        <span className="text-xxs text-zinc-400 dark:text-zinc-600 font-mono">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed font-sans ${textColor}`}>
+                        {log.message}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={unifiedLogEndRef} />
+            </div>
+
+            {/* 3. BOTTOM PANEL: Controls & Input Panel */}
+            <div className="space-y-4 shrink-0 bg-zinc-100/30 dark:bg-zinc-900/30 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-900 transition-colors duration-200">
+              {/* Task / Chat Text input */}
+              <div className="relative">
+                {geminiStatus === 'connected' ? (
+                  /* If live voice call is connected, show text chat input to Gemini */
+                  <div className="flex items-center gap-2 p-1.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                    <input
+                      type="text"
+                      value={geminiChatInput}
+                      onChange={(e) => setGeminiChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSendLiveChatText(); }}
+                      placeholder="发送文本指令给实时语音助手..."
+                      className="flex-1 bg-transparent border-none focus:outline-none text-xs text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 px-2 py-2"
+                    />
+                    <button
+                      onClick={handleSendLiveChatText}
+                      disabled={!geminiChatInput.trim()}
+                      className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow disabled:opacity-30 transition-all shrink-0 active:scale-95 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5 fill-white text-transparent" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Otherwise, show main Agent task textarea */
+                  <>
+                    <textarea
+                      value={agentInput}
+                      onChange={(e) => setAgentInput(e.target.value)}
+                      placeholder="给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)"
+                      disabled={agentRunning || !activeSerial}
+                      className="w-full h-20 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-300 dark:focus:border-zinc-700 rounded-xl p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors shadow-sm dark:shadow-none"
+                    />
+                    
+                    {/* Run / Stop buttons */}
+                    <div className="absolute bottom-3 right-3">
+                      {!agentRunning ? (
+                        <button
+                          onClick={handleStartAgent}
+                          disabled={!agentInput.trim() || !activeSerial}
+                          className="flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
+                          title="发送任务指令"
+                        >
+                          <Send className="w-3.5 h-3.5 fill-white text-transparent" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleGlobalStop}
+                          className="flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow transition-all active:scale-95 animate-pulse cursor-pointer"
+                          title="紧急停止 Agent 与通话"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-white text-transparent" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
