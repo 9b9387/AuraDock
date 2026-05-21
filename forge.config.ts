@@ -14,6 +14,10 @@ const config: ForgeConfig = {
       unpack: '**/node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar',
     },
     icon: path.join(__dirname, 'assets/icon'),
+    extendInfo: {
+      NSMicrophoneUsageDescription: 'This app requires microphone access to send your voice to Gemini Live.',
+      NSCameraUsageDescription: 'This app requires camera access to capture the video feed.',
+    },
   },
   rebuildConfig: {
     onlyModules: [],

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, Play, PhoneOff } from 'lucide-react';
+import { Mic, Play, PhoneOff, MicOff } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
 
 interface LiveCallControllerProps {
@@ -8,6 +8,7 @@ interface LiveCallControllerProps {
   waveBars: number[];
   handleStartLiveCall: () => void;
   handleStopLiveCall: () => void;
+  textOnlyMode?: boolean;
 }
 
 export const LiveCallController: React.FC<LiveCallControllerProps> = ({
@@ -16,6 +17,7 @@ export const LiveCallController: React.FC<LiveCallControllerProps> = ({
   waveBars,
   handleStartLiveCall,
   handleStopLiveCall,
+  textOnlyMode = false,
 }) => {
   if (geminiStatus === 'disconnected' || geminiStatus === 'error') {
     return (
@@ -46,20 +48,27 @@ export const LiveCallController: React.FC<LiveCallControllerProps> = ({
   return (
     <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-3 flex items-center justify-between relative overflow-hidden shadow-sm dark:shadow-none mb-4 shrink-0">
       <div className="flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+        <span className={`w-1.5 h-1.5 rounded-full ${textOnlyMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-ping'}`}></span>
         <span className="text-xxs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-          {geminiStatus === 'connecting' ? '连接中...' : '通话中'}
+          {geminiStatus === 'connecting' ? '连接中...' : (textOnlyMode ? '文字通话中' : '通话中')}
         </span>
       </div>
 
-      <div className="h-8 flex items-end justify-center gap-1 w-32 shrink-0">
-        {waveBars.map((height, i) => (
-          <div 
-            key={i} 
-            style={{ height: `${height}%` }}
-            className="w-1 bg-emerald-500 rounded-full transition-all duration-100 wave-bar shrink-0"
-          />
-        ))}
+      <div className="h-8 flex items-center justify-center gap-1 w-32 shrink-0">
+        {textOnlyMode ? (
+          <div className="flex items-center gap-1 text-zinc-400 dark:text-zinc-500 text-[10px] font-bold">
+            <MicOff className="w-3.5 h-3.5" />
+            <span>已禁用麦克风</span>
+          </div>
+        ) : (
+          waveBars.map((height, i) => (
+            <div 
+              key={i} 
+              style={{ height: `${height}%` }}
+              className="w-1 bg-emerald-500 rounded-full transition-all duration-100 wave-bar shrink-0"
+            />
+          ))
+        )}
       </div>
 
       <button

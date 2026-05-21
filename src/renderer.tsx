@@ -10,6 +10,7 @@ import { LiveCallController } from './renderer/components/LiveCallController';
 import { UnifiedLogs } from './renderer/components/UnifiedLogs';
 import { ControlPanel } from './renderer/components/ControlPanel';
 import { SettingsModal } from './renderer/components/SettingsModal';
+import { MicCheckModal, MicErrorType } from './renderer/components/MicCheckModal';
 
 import { 
   scrcpyAudioQueue, 
@@ -31,6 +32,17 @@ export function App() {
   
   // App Settings State visibility
   const [showSettings, setShowSettings] = useState(false);
+
+  // Microphone Check Modal States
+  const [micCheckOpen, setMicCheckOpen] = useState(false);
+  const [micErrorType, setMicErrorType] = useState<MicErrorType | null>(null);
+  const [textOnlyMode, setTextOnlyMode] = useState(false);
+  const textOnlyModeRef = useRef(false);
+
+  const setTextOnlyModeSync = useCallback((val: boolean) => {
+    textOnlyModeRef.current = val;
+    setTextOnlyMode(val);
+  }, []);
   
   // Agent Panel Show/Hide State
   const [showWorkspace, setShowWorkspace] = useState(true);
@@ -133,8 +145,189 @@ export function App() {
   const framesReceivedRef = useRef<number>(0);
   const framesDecodedRef = useRef<number>(0);
 
-  // Ref for auto-scrolling log containers
-  const unifiedLogEndRef = useRef<HTMLDivElement | null>(null);
+  // Reconnection States
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [reconnectFailed, setReconnectFailed] = useState(false);
+
+  const reconnectTimeoutIdRef = useRef<any>(null);
+  const reconnectCheckTimeoutIdRef = useRef<any>(null);
+
+  const scrcpyStatusRef = useRef(scrcpyStatus);
+  useEffect(() => {
+    scrcpyStatusRef.current = scrcpyStatus;
+  }, [scrcpyStatus]);
+
+  const activeSerialRef = useRef(activeSerial);
+  useEffect(() => {
+    activeSerialRef.current = activeSerial;
+  }, [activeSerial]);
+
+  const activeDeviceModelRef = useRef(activeDeviceModel);
+  useEffect(() => {
+    activeDeviceModelRef.current = activeDeviceModel;
+  }, [activeDeviceModel]);
+
+  const reconnectingRef = useRef(reconnecting);
+  useEffect(() => {
+    reconnectingRef.current = reconnecting;
+  }, [reconnecting]);
+
+  const reconnectFailedRef = useRef(reconnectFailed);
+  useEffect(() => {
+    reconnectFailedRef.current = reconnectFailed;
+  }, [reconnectFailed]);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (reconnectTimeoutIdRef.current) clearTimeout(reconnectTimeoutIdRef.current);
+      if (reconnectCheckTimeoutIdRef.current) clearTimeout(reconnectCheckTimeoutIdRef.current);
+    };
+  }, []);
+
+  // Circular dependency resolver
+  const startScrcpyRef = useRef<any>(null);
+
+  // Reconnection Attempt Function
+  const attemptReconnection = useCallback((attempt: number, serial: string, modelName: string | null) => {
+    if (attempt > 3) {
+      console.error('[Renderer] Auto-reconnection failed after 3 attempts.');
+      setReconnecting(false);
+      setReconnectFailed(true);
+      setReconnectAttempt(0);
+      setScrcpyStatus('Connection Failed');
+      setScrcpyError('自动重新连接失败。请检查物理连接后手动重试。');
+      
+      setAgentLogs((prev) => [
+        ...prev,
+        { type: 'status', message: '自动重新连接失败。请手动点击“重新连接”按钮。', timestamp: Date.now() }
+      ]);
+      return;
+    }
+
+    setReconnectAttempt(attempt);
+
+    // Increase interval: Attempt 1 = 2s, Attempt 2 = 4s, Attempt 3 = 8s
+    const delay = attempt === 1 ? 2000 : attempt === 2 ? 4000 : 8000;
+    
+    setAgentLogs((prev) => [
+      ...prev,
+      { type: 'status', message: `正在尝试第 ${attempt}/3 次自动重新连接，等待时间 ${delay / 1000}s...`, timestamp: Date.now() }
+    ]);
+
+    if (reconnectTimeoutIdRef.current) clearTimeout(reconnectTimeoutIdRef.current);
+    if (reconnectCheckTimeoutIdRef.current) clearTimeout(reconnectCheckTimeoutIdRef.current);
+
+    reconnectTimeoutIdRef.current = setTimeout(async () => {
+      console.log(`[Renderer] Auto-reconnect executing attempt #${attempt}...`);
+      
+      let devicePresent = false;
+      try {
+        const devList = await (window as any).adb.getDevices();
+        devicePresent = devList.some((d: any) => d.serial === serial);
+      } catch (err) {
+        console.error('[Renderer] Error polling devices during reconnect:', err);
+      }
+
+      if (devicePresent) {
+        if (startScrcpyRef.current) {
+          startScrcpyRef.current(serial, modelName || undefined);
+        }
+      } else {
+        console.warn(`[Renderer] Attempt #${attempt}: Device ${serial} is not connected via USB. Skipping scrcpy request.`);
+        setAgentLogs((prev) => [
+          ...prev,
+          { type: 'status', message: `第 ${attempt}/3 次重连尝试：未检测到 USB 连接，等待下一次尝试...`, timestamp: Date.now() }
+        ]);
+      }
+
+      reconnectCheckTimeoutIdRef.current = setTimeout(() => {
+        const currentStatus = scrcpyStatusRef.current;
+        if (currentStatus.toLowerCase().includes('streaming')) {
+          console.log('[Renderer] Auto-reconnection succeeded!');
+          setReconnecting(false);
+          setReconnectAttempt(0);
+          setReconnectFailed(false);
+          setAgentLogs((prev) => [
+            ...prev,
+            { type: 'status', message: '设备连接已成功恢复！', timestamp: Date.now() }
+          ]);
+        } else {
+          console.warn(`[Renderer] Attempt #${attempt} did not establish stream (status: ${currentStatus}). Trying next...`);
+          attemptReconnection(attempt + 1, serial, modelName);
+        }
+      }, 5000);
+
+    }, delay);
+  }, []);
+
+  // Connection Lost Handler
+  const handleDeviceDisconnection = useCallback((reason: string, errorMessage?: string) => {
+    if (reconnectingRef.current || reconnectFailedRef.current) return;
+    if (!activeSerialRef.current) return;
+
+    console.warn(`[Renderer] Device connection lost due to ${reason}. Initiating auto-reconnect flow...`);
+    
+    // 1. If running an agent task, stop it and notify in logs
+    if (agentRunningRef.current) {
+      console.log('[Renderer] Stopping vision agent due to device disconnect');
+      (window as any).adb.stopAgent();
+      agentRunningRef.current = false;
+      setAgentRunning(false);
+      setAgentLogs((prev) => [
+        ...prev,
+        { type: 'status', message: '因与设备失去连接，任务中断。', timestamp: Date.now() }
+      ]);
+    }
+
+    // 2. Set reconnecting states
+    setReconnecting(true);
+    setReconnectFailed(false);
+    setReconnectAttempt(1);
+    
+    setAgentLogs((prev) => [
+      ...prev,
+      { type: 'status', message: `设备连接中断 (${errorMessage || '推流中断'})。正在尝试自动重新连接...`, timestamp: Date.now() }
+    ]);
+
+    // 3. Clear/disconnect current stream resources (keep activeSerial active so mirror view stays visible)
+    geminiLiveService.disconnect();
+    audioMixer.stop();
+    geminiVoicePlayer.stop();
+    scrcpyAudioQueue.clear();
+    
+    if (currentPortRef.current) {
+      currentPortRef.current.close();
+      currentPortRef.current = null;
+    }
+    if (decoderRef.current) {
+      decoderRef.current.close();
+      decoderRef.current = null;
+    }
+    videoWidthRef.current = 0;
+    videoHeightRef.current = 0;
+
+    // 4. Start reconnection attempts
+    const serial = activeSerialRef.current;
+    const modelName = activeDeviceModelRef.current;
+    attemptReconnection(1, serial, modelName);
+  }, [attemptReconnection]);
+
+  // Manual Reconnection Handler
+  const handleManualReconnect = useCallback(() => {
+    if (!activeSerialRef.current) return;
+    setReconnectFailed(false);
+    setReconnecting(false);
+    setReconnectAttempt(0);
+    
+    if (reconnectTimeoutIdRef.current) clearTimeout(reconnectTimeoutIdRef.current);
+    if (reconnectCheckTimeoutIdRef.current) clearTimeout(reconnectCheckTimeoutIdRef.current);
+    
+    if (startScrcpyRef.current) {
+      startScrcpyRef.current(activeSerialRef.current, activeDeviceModelRef.current || undefined);
+    }
+  }, []);
 
   // Load and refresh connected ADB devices
   const refreshDevices = useCallback(async () => {
@@ -142,12 +335,21 @@ export function App() {
     try {
       const devList = await (window as any).adb.getDevices();
       setDevices(devList);
+
+      // If active device is lost during polling
+      if (activeSerialRef.current) {
+        const stillConnected = devList.some((d: any) => d.serial === activeSerialRef.current);
+        if (!stillConnected) {
+          console.warn('[Renderer] Active device disconnected from system:', activeSerialRef.current);
+          handleDeviceDisconnection('device-lost', '设备断开连接');
+        }
+      }
     } catch (err: any) {
       console.error('[Renderer] Error loading devices:', err);
     } finally {
       setLoadingDevices(false);
     }
-  }, []);
+  }, [handleDeviceDisconnection]);
 
   // Poll device list on mount
   useEffect(() => {
@@ -165,11 +367,6 @@ export function App() {
       if (unsubscribe) unsubscribe();
     };
   }, []);
-
-  // Auto-scroll logs to bottom when updated
-  useEffect(() => {
-    unifiedLogEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [agentLogs, geminiLogs]);
 
   // Handle active stream waveform animation
   useEffect(() => {
@@ -333,6 +530,7 @@ export function App() {
             console.error('[Renderer] Port error:', message.error);
             setScrcpyStatus('Error');
             setScrcpyError(message.error);
+            handleDeviceDisconnection('port-error', message.error);
           }
         };
         currentPortRef.current.start();
@@ -343,8 +541,21 @@ export function App() {
     (window as any).adb.requestScrcpy(serial);
   }, [initDecoder, decodePacket]);
 
+  useEffect(() => {
+    startScrcpyRef.current = startScrcpy;
+  }, [startScrcpy]);
+
   // Disconnect Scrcpy stream
   const disconnectScrcpy = useCallback(() => {
+    // Clear reconnection states and timers
+    if (reconnectTimeoutIdRef.current) clearTimeout(reconnectTimeoutIdRef.current);
+    if (reconnectCheckTimeoutIdRef.current) clearTimeout(reconnectCheckTimeoutIdRef.current);
+    reconnectTimeoutIdRef.current = null;
+    reconnectCheckTimeoutIdRef.current = null;
+    setReconnecting(false);
+    setReconnectAttempt(0);
+    setReconnectFailed(false);
+
     // 1. Disconnect Gemini Live Call
     geminiLiveService.disconnect();
 
@@ -438,21 +649,30 @@ export function App() {
       ]);
 
       if (status === 'connected') {
-        // Start audio mixing and sending
-        audioMixer.start((pcmData) => {
-          const base64 = arrayBufferToBase64(pcmData);
-          geminiLiveService.sendAudioChunk(base64);
-        }).then(() => {
-          const sharedCtx = (audioMixer as any).audioCtx;
-          geminiVoicePlayer.start(sharedCtx);
-        }).catch(err => {
-          console.error('[Renderer] Audio mixer start failed:', err);
+        if (textOnlyModeRef.current) {
+          // Bypassing audioMixer in text-only mode (we have no microphone)
           setGeminiLogs((prev) => [
             ...prev,
-            { type: 'status', message: `Audio input error: ${err.message}`, timestamp: Date.now() }
+            { type: 'status', message: '💡 已开启文字对话模式（无麦克风输入，仅接收回复语音/文字）', timestamp: Date.now() }
           ]);
-          geminiLiveService.disconnect();
-        });
+          geminiVoicePlayer.start();
+        } else {
+          // Start audio mixing and sending
+          audioMixer.start((pcmData) => {
+            const base64 = arrayBufferToBase64(pcmData);
+            geminiLiveService.sendAudioChunk(base64);
+          }).then(() => {
+            const sharedCtx = (audioMixer as any).audioCtx;
+            geminiVoicePlayer.start(sharedCtx);
+          }).catch(err => {
+            console.error('[Renderer] Audio mixer start failed:', err);
+            setGeminiLogs((prev) => [
+              ...prev,
+              { type: 'status', message: `Audio input error: ${err.message}`, timestamp: Date.now() }
+            ]);
+            geminiLiveService.disconnect();
+          });
+        }
 
         // Start 1 FPS image pushing
         if (canvasRef.current) {
@@ -519,7 +739,11 @@ export function App() {
   }, []);
 
   // Connect Gemini Live Call
-  const handleStartLiveCall = useCallback(async () => {
+  // Internal helper to actually initiate Gemini Live Call (normal or text-only)
+  const startLiveCallInternal = useCallback(async (isTextOnly: boolean) => {
+    setTextOnlyModeSync(isTextOnly);
+    setMicCheckOpen(false);
+
     try {
       const apiKey = await (window as any).adb.getGeminiApiKey();
       if (!apiKey) {
@@ -589,7 +813,104 @@ INSTRUCTION FOR TAKE-OVER:
         { type: 'status', message: `Failed to fetch API key or initialize handover: ${err.message}`, timestamp: Date.now() }
       ]);
     }
-  }, [activeSerial]);
+  }, [activeSerial, setTextOnlyModeSync]);
+
+  // Connect Gemini Live Call with step-by-step Microphone checks
+  const handleStartLiveCall = useCallback(async () => {
+    try {
+      if (!activeSerial) {
+        setGeminiLogs((prev) => [
+          ...prev,
+          { type: 'status', message: 'No active device stream connected. Please connect a device first.', timestamp: Date.now() }
+        ]);
+        return;
+      }
+
+      setGeminiLogs((prev) => [
+        ...prev,
+        { type: 'status', message: '🔍 正在检查音频输入设备与权限...', timestamp: Date.now() }
+      ]);
+
+      // 1. Check for hardware microphone device presence
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasMic = devices.some(device => device.kind === 'audioinput');
+      if (!hasMic) {
+        setGeminiLogs((prev) => [
+          ...prev,
+          { type: 'status', message: '⚠️ 未检测到任何麦克风硬件设备。', timestamp: Date.now() }
+        ]);
+        setMicErrorType('no-mic');
+        setMicCheckOpen(true);
+        return;
+      }
+
+      // 2. Check for microphone permission
+      const permStatus = await (window as any).adb.getMicrophoneStatus();
+      if (permStatus === 'denied' || permStatus === 'restricted') {
+        setGeminiLogs((prev) => [
+          ...prev,
+          { type: 'status', message: '⚠️ 麦克风权限已被系统拒绝。请在系统设置中授权。', timestamp: Date.now() }
+        ]);
+        setMicErrorType('permission-denied');
+        setMicCheckOpen(true);
+        return;
+      }
+
+      if (permStatus === 'not-determined') {
+        setGeminiLogs((prev) => [
+          ...prev,
+          { type: 'status', message: '🎙️ 正在向系统请求麦克风访问权限...', timestamp: Date.now() }
+        ]);
+        const reqResult = await (window as any).adb.requestMicrophone();
+        if (reqResult !== 'granted') {
+          setGeminiLogs((prev) => [
+            ...prev,
+            { type: 'status', message: '⚠️ 麦克风授权失败。', timestamp: Date.now() }
+          ]);
+          setMicErrorType('permission-denied');
+          setMicCheckOpen(true);
+          return;
+        }
+      }
+
+      // 3. Check for microphone usability/availability
+      let micUsable = false;
+      let checkStream: MediaStream | null = null;
+      try {
+        checkStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micUsable = true;
+      } catch (err: any) {
+        console.error('[Mic Check] getUserMedia failed:', err);
+      } finally {
+        if (checkStream) {
+          checkStream.getTracks().forEach(track => track.stop());
+        }
+      }
+
+      if (!micUsable) {
+        setGeminiLogs((prev) => [
+          ...prev,
+          { type: 'status', message: '⚠️ 麦克风设备不可用（可能被其他程序独占或发生驱动错误）。', timestamp: Date.now() }
+        ]);
+        setMicErrorType('unusable');
+        setMicCheckOpen(true);
+        return;
+      }
+
+      setGeminiLogs((prev) => [
+        ...prev,
+        { type: 'status', message: '✅ 麦克风就绪。', timestamp: Date.now() }
+      ]);
+
+      // All checks passed! Proceed with normal voice connection
+      await startLiveCallInternal(false);
+    } catch (err: any) {
+      setGeminiLogs((prev) => [
+        ...prev,
+        { type: 'status', message: `检查麦克风时出错: ${err.message}`, timestamp: Date.now() }
+      ]);
+    }
+  }, [activeSerial, startLiveCallInternal]);
 
   // Disconnect Gemini Live Call
   const handleStopLiveCall = useCallback(() => {
@@ -673,6 +994,11 @@ INSTRUCTION FOR TAKE-OVER:
               scrcpyError={scrcpyError}
               scrcpyStatus={scrcpyStatus}
               handleCanvasMouseEvent={handleCanvasMouseEvent}
+              reconnecting={reconnecting}
+              reconnectAttempt={reconnectAttempt}
+              reconnectFailed={reconnectFailed}
+              onManualReconnect={handleManualReconnect}
+              onCancelReconnect={disconnectScrcpy}
             />
           </div>
 
@@ -704,12 +1030,12 @@ INSTRUCTION FOR TAKE-OVER:
               waveBars={waveBars}
               handleStartLiveCall={handleStartLiveCall}
               handleStopLiveCall={handleStopLiveCall}
+              textOnlyMode={textOnlyMode}
             />
 
             {/* 2. MIDDLE SECTION: Unified Chronological Log Feed */}
             <UnifiedLogs
               unifiedLogs={unifiedLogs}
-              unifiedLogEndRef={unifiedLogEndRef}
             />
 
             {/* 3. BOTTOM PANEL: Controls & Input Panel */}
@@ -739,6 +1065,19 @@ INSTRUCTION FOR TAKE-OVER:
           }}
         />
       )}
+
+      {/* Microphone Check Modal Overlay */}
+      <MicCheckModal
+        isOpen={micCheckOpen}
+        onClose={() => setMicCheckOpen(false)}
+        errorType={micErrorType}
+        onOpenSettings={async () => {
+          await (window as any).adb.openSystemSettings();
+        }}
+        onFallbackToText={() => {
+          startLiveCallInternal(true);
+        }}
+      />
     </div>
   );
 }
