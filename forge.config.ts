@@ -1,4 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
+import path from 'node:path';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
@@ -9,9 +10,47 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar',
+    },
+    icon: path.join(__dirname, 'assets/icon'),
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    onlyModules: [],
+  },
+  hooks: {
+    packageAfterCopy: async (config, buildPath, electronVersion, platform, arch) => {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const { execSync } = require('node:child_process');
+
+      console.log(`\n[Hook] packageAfterCopy: files in buildPath:`, fs.readdirSync(buildPath));
+
+      const pkgSrc = path.join(__dirname, 'package.json');
+      const pkgDest = path.join(buildPath, 'package.json');
+      if (fs.existsSync(pkgSrc)) {
+        fs.copyFileSync(pkgSrc, pkgDest);
+      }
+
+      const lockSrc = path.join(__dirname, 'package-lock.json');
+      const lockDest = path.join(buildPath, 'package-lock.json');
+      if (fs.existsSync(lockSrc)) {
+        fs.copyFileSync(lockSrc, lockDest);
+      }
+
+      try {
+        console.log(`[Hook] packageAfterCopy: Installing production dependencies in ${buildPath}...`);
+        execSync('npm install --omit=dev --no-audit --no-fund', {
+          cwd: buildPath,
+          stdio: 'inherit',
+        });
+        console.log('[Hook] packageAfterCopy: Production dependencies installed successfully.\n');
+      } catch (err) {
+        console.error('[Hook] packageAfterCopy: Failed to install production dependencies:', err);
+        throw err;
+      }
+    },
+  },
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ['darwin']),

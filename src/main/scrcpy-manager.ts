@@ -1,5 +1,6 @@
 import { ipcMain, MessageChannelMain } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { ScrcpyStreamService, MediaKind, ControlMessageType } from '@9b9387/android-stream-scrcpy';
 
 import { AdbDeviceInfo } from '../types';
@@ -72,8 +73,21 @@ export class ScrcpyManager {
       console.warn(`[Scrcpy Manager] Failed to cleanup processes for ${serial}:`, e);
     }
 
-    // Explicitly point to the jar in node_modules
-    const serverJarPath = path.join(process.cwd(), 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+    // Explicitly point to the jar in node_modules, supporting ASAR packaged apps (using app.asar.unpacked)
+    let serverJarPath = path.join(__dirname, '../node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+    
+    // Fallback if bundled differently
+    if (!fs.existsSync(serverJarPath)) {
+      serverJarPath = path.join(process.cwd(), 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+    }
+    
+    // Resolve app.asar.unpacked path for native execution
+    if (serverJarPath.includes('app.asar')) {
+      const unpackedPath = serverJarPath.replace('app.asar', 'app.asar.unpacked');
+      if (fs.existsSync(unpackedPath)) {
+        serverJarPath = unpackedPath;
+      }
+    }
 
     // Generate a stable scid
     const scid = 0x0000000a;
