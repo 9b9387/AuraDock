@@ -96,7 +96,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     ? "正在建立连接，请稍候..."
     : isConnected
       ? "发送文本指令给实时语音助手..."
-      : "给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)";
+      : "给 Agent 发送指令...";
 
   const handleSend = () => {
     if (isCallActive) {
@@ -131,14 +131,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           placeholder={placeholderText}
           disabled={isConnecting || (!isCallActive && (agentRunning || !activeSerial))}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               if (!isButtonDisabled) {
                 onButtonClick();
               }
             }
           }}
-          className="block w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
+          className="block w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[150px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
