@@ -10,7 +10,6 @@ export const createKeyEventTool = (context: AgentContext) => new FunctionTool({
     key: z.enum(['BACK', 'HOME', 'APP_SWITCH']),
   }),
   execute: async ({ key }) => {
-    context.log('action', `Key event: ${key}`);
     const service = context.getService();
     switch (key) {
       case 'BACK':

@@ -644,9 +644,22 @@ export function App() {
 
     geminiLiveService.onStatusChanged = (status, msg) => {
       setGeminiStatus(status);
+      
+      // Localize status log message into beautiful Chinese
+      let statusChineseMessage = '';
+      if (status === 'connecting') {
+        statusChineseMessage = '🔍 正在尝试连接至 Gemini Live 语音服务器...';
+      } else if (status === 'connected') {
+        statusChineseMessage = '✅ 已成功连接到 Gemini Live。现在可以开始对话了！';
+      } else if (status === 'disconnected') {
+        statusChineseMessage = `📴 语音通话已断开 ${msg ? `(${msg})` : ''}`;
+      } else if (status === 'error') {
+        statusChineseMessage = `❌ 语音通话连接发生错误。请检查网络代理配置或 API 密钥是否有效。 ${msg ? `(${msg})` : ''}`;
+      }
+
       setGeminiLogs((prev) => [
         ...prev,
-        { type: 'status', message: `Live Call Status: ${status.toUpperCase()} ${msg || ''}`, timestamp: Date.now() }
+        { type: 'status', message: statusChineseMessage, timestamp: Date.now() }
       ]);
 
       if (status === 'connected') {
@@ -742,19 +755,24 @@ export function App() {
   // Connect Gemini Live Call
   // Internal helper to actually initiate Gemini Live Call (normal or text-only)
   const startLiveCallInternal = useCallback(async (isTextOnly: boolean) => {
+    console.log('[LiveCall] startLiveCallInternal called. isTextOnly =', isTextOnly);
     setTextOnlyModeSync(isTextOnly);
     setMicCheckOpen(false);
 
     try {
+      console.log('[LiveCall] Fetching Gemini API Key...');
       const apiKey = await (window as any).adb.getGeminiApiKey();
       if (!apiKey) {
+        console.error('[LiveCall] Gemini API Key is missing!');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: 'Missing GEMINI_API_KEY in environment/.env', timestamp: Date.now() }
+          { type: 'status', message: '⚠️ 未配置 GEMINI_API_KEY。已自动为您打开偏好设置，请在设置中填写您的 API 密钥并保存。', timestamp: Date.now() }
         ]);
+        setShowSettings(true);
         return;
       }
       if (!activeSerial) {
+        console.error('[LiveCall] No active device stream connected.');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: 'No active device stream connected. Please connect a device first.', timestamp: Date.now() }
@@ -766,6 +784,7 @@ export function App() {
 
       // If Vision Agent is running, pause it and inherit state
       if (agentRunningRef.current) {
+        console.log('[LiveCall] Vision Agent is running, pausing and taking over state...');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: 'Detecting running Agent. Pausing Agent to synchronize session...', timestamp: Date.now() }
@@ -807,8 +826,10 @@ INSTRUCTION FOR TAKE-OVER:
         }
       }
 
+      console.log('[LiveCall] Connecting via geminiLiveService.connect...');
       geminiLiveService.connect(apiKey, activeSerial, systemInstruction);
     } catch (err: any) {
+      console.error('[LiveCall] startLiveCallInternal exception:', err);
       setGeminiLogs((prev) => [
         ...prev,
         { type: 'status', message: `Failed to fetch API key or initialize handover: ${err.message}`, timestamp: Date.now() }
@@ -818,8 +839,11 @@ INSTRUCTION FOR TAKE-OVER:
 
   // Connect Gemini Live Call with step-by-step Microphone checks
   const handleStartLiveCall = useCallback(async () => {
+    console.log('[LiveCall] handleStartLiveCall triggered!');
     try {
+      console.log('[LiveCall] activeSerial:', activeSerial);
       if (!activeSerial) {
+        console.warn('[LiveCall] Cannot start call because activeSerial is null/falsy.');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: 'No active device stream connected. Please connect a device first.', timestamp: Date.now() }
@@ -833,9 +857,13 @@ INSTRUCTION FOR TAKE-OVER:
       ]);
 
       // 1. Check for hardware microphone device presence
+      console.log('[LiveCall] Step 1: Checking for hardware mic...');
       const devices = await navigator.mediaDevices.enumerateDevices();
+      console.log('[LiveCall] Devices found:', devices);
       const hasMic = devices.some(device => device.kind === 'audioinput');
+      console.log('[LiveCall] hasMic:', hasMic);
       if (!hasMic) {
+        console.warn('[LiveCall] No microphone hardware device detected!');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: '⚠️ 未检测到任何麦克风硬件设备。', timestamp: Date.now() }
@@ -846,8 +874,11 @@ INSTRUCTION FOR TAKE-OVER:
       }
 
       // 2. Check for microphone permission
+      console.log('[LiveCall] Step 2: Checking mic permission...');
       const permStatus = await (window as any).adb.getMicrophoneStatus();
+      console.log('[LiveCall] Microphone permission status from systemPreferences:', permStatus);
       if (permStatus === 'denied' || permStatus === 'restricted') {
+        console.warn('[LiveCall] Microphone permission is denied or restricted by OS.');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: '⚠️ 麦克风权限已被系统拒绝。请在系统设置中授权。', timestamp: Date.now() }
@@ -858,12 +889,15 @@ INSTRUCTION FOR TAKE-OVER:
       }
 
       if (permStatus === 'not-determined') {
+        console.log('[LiveCall] Microphone permission is not determined. Requesting permission...');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: '🎙️ 正在向系统请求麦克风访问权限...', timestamp: Date.now() }
         ]);
         const reqResult = await (window as any).adb.requestMicrophone();
+        console.log('[LiveCall] requestMicrophone result:', reqResult);
         if (reqResult !== 'granted') {
+          console.warn('[LiveCall] Microphone permission request was not granted.');
           setGeminiLogs((prev) => [
             ...prev,
             { type: 'status', message: '⚠️ 麦克风授权失败。', timestamp: Date.now() }
@@ -875,20 +909,26 @@ INSTRUCTION FOR TAKE-OVER:
       }
 
       // 3. Check for microphone usability/availability
+      console.log('[LiveCall] Step 3: Checking microphone usability with getUserMedia...');
       let micUsable = false;
       let checkStream: MediaStream | null = null;
       try {
         checkStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         micUsable = true;
+        console.log('[LiveCall] getUserMedia succeeded, microphone is usable.');
       } catch (err: any) {
-        console.error('[Mic Check] getUserMedia failed:', err);
+        console.error('[LiveCall] [Mic Check] getUserMedia failed:', err);
       } finally {
         if (checkStream) {
-          checkStream.getTracks().forEach(track => track.stop());
+          checkStream.getTracks().forEach(track => {
+            console.log('[LiveCall] Stopping check stream track:', track.label);
+            track.stop();
+          });
         }
       }
 
       if (!micUsable) {
+        console.warn('[LiveCall] Microphone device is not usable.');
         setGeminiLogs((prev) => [
           ...prev,
           { type: 'status', message: '⚠️ 麦克风设备不可用（可能被其他程序独占或发生驱动错误）。', timestamp: Date.now() }
@@ -898,14 +938,17 @@ INSTRUCTION FOR TAKE-OVER:
         return;
       }
 
+      console.log('[LiveCall] Mic is ready.');
       setGeminiLogs((prev) => [
         ...prev,
         { type: 'status', message: '✅ 麦克风就绪。', timestamp: Date.now() }
       ]);
 
       // All checks passed! Proceed with normal voice connection
+      console.log('[LiveCall] All mic checks passed. Calling startLiveCallInternal...');
       await startLiveCallInternal(false);
     } catch (err: any) {
+      console.error('[LiveCall] handleStartLiveCall exception caught:', err);
       setGeminiLogs((prev) => [
         ...prev,
         { type: 'status', message: `检查麦克风时出错: ${err.message}`, timestamp: Date.now() }

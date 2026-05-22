@@ -31,9 +31,14 @@ export class ScrcpyManager {
   private async ensureAdb() {
     if (this.adb) return;
     try {
-      // Use dynamic import for ESM-only @u4/adbkit
-      const { createClient } = await import('@u4/adbkit');
-      this.adb = createClient();
+      const adbkit = await import('@devicefarmer/adbkit');
+      const AdbClass = adbkit.Adb || (adbkit as any).default?.Adb;
+      if (AdbClass) {
+        this.adb = AdbClass.createClient();
+      } else {
+        const createClientFn = adbkit.createClient || (adbkit as any).default?.createClient;
+        this.adb = createClientFn();
+      }
     } catch (e) {
       console.error('[ScrcpyManager] Failed to load adbkit:', e);
     }
@@ -44,11 +49,32 @@ export class ScrcpyManager {
     if (!this.adb) return [];
     try {
       const devices = await this.adb.listDevices();
-      return devices.map((d: any) => ({
-        id: d.id,
-        serial: d.id, 
-        type: d.type
-      })) as unknown as AdbDeviceInfo[];
+      const deviceInfos = await Promise.all(
+        devices.map(async (d: any) => {
+          let modelName = '未知安卓设备';
+          try {
+            const deviceClient = this.adb.getDevice(d.id);
+            const props = await deviceClient.getProperties();
+            const brand = props['ro.product.brand'] || props['ro.product.manufacturer'] || '';
+            const model = props['ro.product.model'] || '';
+            
+            if (brand || model) {
+              const capitalizedBrand = brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : '';
+              modelName = [capitalizedBrand, model].filter(Boolean).join(' ');
+            }
+          } catch (err) {
+            console.warn(`[ScrcpyManager] Failed to fetch properties for device ${d.id}:`, err);
+          }
+          
+          return {
+            id: d.id,
+            serial: d.id,
+            type: d.type,
+            model: modelName,
+          };
+        })
+      );
+      return deviceInfos as unknown as AdbDeviceInfo[];
     } catch (e) {
       console.error('Failed to list devices:', e);
       return [];

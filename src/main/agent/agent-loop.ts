@@ -63,7 +63,6 @@ export class AgentLoop {
         continue;
       }
       cycleCount++;
-      this.context.log('status', `Cycle ${cycleCount}`);
 
       // 1. Capture Current State
       const screenshot = await this.context.captureScreenshot();
@@ -82,6 +81,7 @@ export class AgentLoop {
         decisionPrompt.push({ inlineData: { mimeType: 'image/jpeg', data: screenshot } });
       }
 
+      let reasoningText = '';
       let toolCall: any = null;
       let finalAnswer = '';
 
@@ -93,6 +93,13 @@ export class AgentLoop {
           runConfig: { pauseOnToolCalls: true, maxLlmCalls: 1 }
         })) {
           if (!this.isRunning) break;
+
+          // Accumulate reasoning/thought text as it streams
+          const text = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
+          if (text) {
+            reasoningText += text;
+          }
+
           const structured = toStructuredEvents(event);
           for (const se of structured) {
             if (se.type === EventType.TOOL_CALL) {
@@ -113,6 +120,11 @@ export class AgentLoop {
       }
 
       if (!this.isRunning) break;
+
+      // Log the reasoning/thought if any is generated before executing the action
+      if (reasoningText.trim()) {
+        this.context.log('thought', reasoningText.trim());
+      }
 
       if (finalAnswer && !toolCall) {
         this.context.log('thought', `Task Completed: ${finalAnswer}`);
@@ -143,7 +155,6 @@ export class AgentLoop {
 
         // 3. OBSERVATION PHASE
         if (UI_TOOLS.includes(toolName)) {
-          this.context.log('status', 'Observing...');
           await new Promise(r => setTimeout(r, 2000));
           if (!this.isRunning) break;
           const afterScreenshot = await this.context.captureScreenshot();
@@ -172,6 +183,9 @@ export class AgentLoop {
             }
             if (!this.isRunning) break;
             this.currentContext = obsText;
+            if (obsText.trim()) {
+              this.context.log('thought', `Observation: ${obsText.trim()}`);
+            }
             this.actionHistory.push(`Turn ${cycleCount}: ${toolName} -> ${obsText.split('\n')[0]}`);
           } catch (e) {
             if (!this.isRunning) break;

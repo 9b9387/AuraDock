@@ -24,8 +24,6 @@ export const createSwipeTool = (context: AgentContext) => new FunctionTool({
     const px2 = Math.round((x2 / 1000) * width);
     const py2 = Math.round((y2 / 1000) * height);
 
-    context.log('action', `Swiping (${x1}, ${y1})->(${x2}, ${y2}) -> Pixels (${px1}, ${py1})->(${px2}, ${py2})`);
-
     service.sendControlMessage({
       type: ControlMessageType.INJECT_TOUCH_EVENT,
       action: 0, // DOWN

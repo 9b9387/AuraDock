@@ -20,8 +20,6 @@ export const createTapTool = (context: AgentContext) => new FunctionTool({
     const pixelX = Math.round((x / 1000) * width);
     const pixelY = Math.round((y / 1000) * height);
 
-    context.log('action', `Tapping at (${x}, ${y}) -> Pixels: (${pixelX}, ${pixelY})`);
-
     service.sendControlMessage({
       type: ControlMessageType.INJECT_TOUCH_EVENT,
       action: 0, // DOWN

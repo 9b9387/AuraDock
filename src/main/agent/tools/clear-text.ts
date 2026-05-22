@@ -18,8 +18,6 @@ export const createClearTextTool = (context: AgentContext) => new FunctionTool({
     // Ref: https://github.com/senzhk/ADBKeyBoard
     const command = `adb -s ${serial} shell am broadcast -a ADB_CLEAR_TEXT`;
     
-    context.log('action', 'Clearing text via ADBKeyBoard');
-    
     try {
       await execPromise(command);
       return { status: 'success' };

@@ -162,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="text"
                 value={localSettings.proxy || ''}
                 onChange={(e) => setLocalSettings({ ...localSettings, proxy: e.target.value })}
-                placeholder="例如: http://127.0.0.1:7890 (不填则默认使用系统/环境变量代理)"
+                placeholder="http://127.0.0.1:7890 (不填则默认使用系统/环境变量代理)"
                 className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
               />
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500">

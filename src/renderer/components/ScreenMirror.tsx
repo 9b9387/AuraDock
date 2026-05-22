@@ -53,9 +53,6 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
             正在连接中...
           </h4>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1.5 font-mono tracking-wider">
-            INITIALIZING STREAM
-          </p>
         </div>
       )}
 
@@ -67,11 +64,8 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
             <Loader2 className="w-8 h-8 text-emerald-600 dark:text-emerald-500 animate-spin relative z-10" />
           </div>
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
-            正在自动重连中...
+            自动重连中 {reconnectAttempt} / 3次...
           </h4>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1.5 font-mono tracking-wider">
-            尝试第 {reconnectAttempt} 次 / 共 3 次
-          </p>
         </div>
       )}
 
@@ -83,17 +77,14 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
             <AlertCircle className="w-8 h-8 text-red-500 dark:text-red-400 relative z-10" />
           </div>
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
-            自动重连失败
+            与设备失去连接，请检查设备连接状态
           </h4>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1.5 max-w-[220px] leading-relaxed">
-            请检查 USB 数据线物理连接
-          </p>
           <div className="flex items-center gap-3 mt-4">
             <button
               onClick={onCancelReconnect}
               className="px-4 py-1.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-[10px] font-bold rounded-full shadow-sm hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
             >
-              取消
+              返回
             </button>
             <button
               onClick={onManualReconnect}

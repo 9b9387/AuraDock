@@ -21,8 +21,6 @@ export const createInputTextTool = (context: AgentContext) => new FunctionTool({
     const b64Text = Buffer.from(text).toString('base64');
     const command = `adb -s ${serial} shell am broadcast -a ADB_INPUT_B64 --es msg '${b64Text}'`;
     
-    context.log('action', `Inputting text via ADBKeyBoard (Base64): ${text.substring(0, 50)}...`);
-    
     try {
       await execPromise(command);
       return { status: 'success' };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Cpu, Sparkles, Check, Play, ArrowDown } from 'lucide-react';
+import { Bot, Cpu, Brain, Info, Terminal, ArrowDown } from 'lucide-react';
 import type { LogEntry } from '../types';
 
 interface UnifiedLogsProps {
@@ -120,39 +120,35 @@ export const UnifiedLogs: React.FC<UnifiedLogsProps> = ({
             let textColor = 'text-zinc-700 dark:text-zinc-300';
 
             if (log.type === 'thought') {
-              badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/10';
-              icon = <Sparkles className="w-3.5 h-3.5" />;
-              cardBg = 'bg-blue-500/[0.02] border-blue-500/10';
-              textColor = 'text-blue-800 dark:text-blue-200';
+              badgeColor = 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/10';
+              icon = <Brain className="w-3.5 h-3.5" />;
+              cardBg = 'bg-purple-500/[0.02] border-purple-500/10';
+              textColor = 'text-purple-800 dark:text-purple-200';
             } else if (log.type === 'action') {
               badgeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10';
-              icon = <Play className="w-3.5 h-3.5" />;
+              icon = <Terminal className="w-3.5 h-3.5" />;
               cardBg = 'bg-amber-500/[0.02] border-amber-500/10';
               textColor = 'text-amber-800 dark:text-amber-200';
             } else if (log.type === 'status') {
-              badgeColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10';
-              icon = <Check className="w-3.5 h-3.5" />;
-              cardBg = 'bg-emerald-500/[0.02] border-emerald-500/10';
-              textColor = 'text-emerald-800 dark:text-emerald-200';
+              badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/10';
+              icon = <Info className="w-3.5 h-3.5" />;
+              cardBg = 'bg-blue-500/[0.02] border-blue-500/10';
+              textColor = 'text-blue-800 dark:text-blue-200';
             }
 
             return (
               <div 
                 key={index}
-                className={`p-3 rounded-xl border ${cardBg} space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200`}
+                className={`p-3 rounded-xl border ${cardBg} flex gap-2.5 items-start animate-in fade-in slide-in-from-bottom-2 duration-200`}
               >
-                <div className="flex items-center justify-between">
-                  <span className={`flex items-center gap-1 text-xxs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${badgeColor}`}>
-                    {icon}
-                    {log.type}
-                  </span>
-                  <span className="text-xxs text-zinc-400 dark:text-zinc-600 font-mono">
-                    {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
+                <div className={`p-1 rounded-lg ${badgeColor} flex-shrink-0 mt-0.5 flex items-center justify-center`}>
+                  {icon}
                 </div>
-                <p className={`text-xs leading-relaxed font-sans ${textColor}`}>
-                  {log.message}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs leading-relaxed font-sans ${textColor}`}>
+                    {log.message}
+                  </p>
+                </div>
               </div>
             );
           })
