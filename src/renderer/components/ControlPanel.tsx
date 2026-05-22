@@ -150,32 +150,42 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               handleStopLiveCall={handleStopLiveCall} 
             />
           ) : (
-            <button
-              onClick={handleStartLiveCall}
-              disabled={!activeSerial}
-              className="flex items-center justify-center p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-emerald-600 dark:text-emerald-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-30 cursor-pointer"
-              title="开启实时语音通话"
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
+            <div className="relative group">
+              <button
+                onClick={handleStartLiveCall}
+                disabled={!activeSerial}
+                className="flex items-center justify-center p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-emerald-600 dark:text-emerald-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-30 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 dark:text-zinc-200 text-xxs font-semibold rounded-lg shadow-xl border border-zinc-200/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 scale-95 group-hover:scale-100">
+                开启 Gemini 语音通话
+              </div>
+            </div>
           )}
 
-          <button
-            onClick={onButtonClick}
-            disabled={isButtonDisabled}
-            className={`flex items-center justify-center p-3 rounded-xl transition-all disabled:opacity-30 active:scale-95 cursor-pointer ${
-              isStopButton 
-                ? "bg-rose-600 hover:bg-rose-500 text-white animate-pulse" 
-                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow"
-            }`}
-            title={isStopButton ? "紧急停止 Agent" : (isCallActive ? "发送文本" : "发送任务指令")}
-          >
-            {isStopButton ? (
-              <Power className="w-4 h-4" />
-            ) : (
-              <Play className="w-4 h-4 fill-current" />
-            )}
-          </button>
+          <div className="relative group">
+            <button
+              onClick={onButtonClick}
+              disabled={isButtonDisabled}
+              className={`flex items-center justify-center p-3 rounded-xl transition-all disabled:opacity-30 active:scale-95 cursor-pointer ${
+                isStopButton 
+                  ? "bg-rose-600 hover:bg-rose-500 text-white animate-pulse" 
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow"
+              }`}
+            >
+              {isStopButton ? (
+                <Power className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4 fill-current" />
+              )}
+            </button>
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 dark:text-zinc-200 text-xxs font-semibold rounded-lg shadow-xl border border-zinc-200/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 scale-95 group-hover:scale-100">
+              {isStopButton ? "停止当前运行的 Agent" : (isCallActive ? "发送文本给语音助手" : "运行 Agent 任务指令 (Enter)")}
+            </div>
+          </div>
         </div>
       </div>
     </div>
