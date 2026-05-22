@@ -648,13 +648,13 @@ export function App() {
       // Localize status log message into beautiful Chinese
       let statusChineseMessage = '';
       if (status === 'connecting') {
-        statusChineseMessage = '🔍 正在尝试连接至 Gemini Live 语音服务器...';
+        statusChineseMessage = '正在尝试连接至 Gemini Live 语音服务器...';
       } else if (status === 'connected') {
-        statusChineseMessage = '✅ 已成功连接到 Gemini Live。现在可以开始对话了！';
+        statusChineseMessage = '已成功连接到 Gemini Live。现在可以开始对话了！';
       } else if (status === 'disconnected') {
-        statusChineseMessage = `📴 语音通话已断开 ${msg ? `(${msg})` : ''}`;
+        statusChineseMessage = `语音通话已断开 ${msg ? `(${msg})` : ''}`;
       } else if (status === 'error') {
-        statusChineseMessage = `❌ 语音通话连接发生错误。请检查网络代理配置或 API 密钥是否有效。 ${msg ? `(${msg})` : ''}`;
+        statusChineseMessage = `语音通话连接发生错误。请检查网络代理配置或 API 密钥是否有效。 ${msg ? `(${msg})` : ''}`;
       }
 
       setGeminiLogs((prev) => [
@@ -667,7 +667,7 @@ export function App() {
           // Bypassing audioMixer in text-only mode (we have no microphone)
           setGeminiLogs((prev) => [
             ...prev,
-            { type: 'status', message: '💡 已开启文字对话模式（无麦克风输入，仅接收回复语音/文字）', timestamp: Date.now() }
+            { type: 'status', message: '已开启文字对话模式（无麦克风输入，仅接收回复语音/文字）', timestamp: Date.now() }
           ]);
           geminiVoicePlayer.start();
         } else {
@@ -715,7 +715,7 @@ export function App() {
           (window as any).adb.resumeAgent(consensus);
           setAgentLogs((prev) => [
             ...prev,
-            { type: 'status', message: `💡 实时通话已挂断，Agent 自动恢复运行。通话共识: ${consensus}`, timestamp: Date.now() }
+            { type: 'status', message: `实时通话已挂断，Agent 自动恢复运行。通话共识: ${consensus}`, timestamp: Date.now() }
           ]);
         }
       }
@@ -766,7 +766,7 @@ export function App() {
         console.error('[LiveCall] Gemini API Key is missing!');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: '⚠️ 未配置 GEMINI_API_KEY。已自动为您打开偏好设置，请在设置中填写您的 API 密钥并保存。', timestamp: Date.now() }
+          { type: 'status', message: '未配置 GEMINI_API_KEY。已自动为您打开偏好设置，请在设置中填写您的 API 密钥并保存。', timestamp: Date.now() }
         ]);
         setShowSettings(true);
         return;
@@ -821,7 +821,7 @@ INSTRUCTION FOR TAKE-OVER:
 
           setAgentLogs((prev) => [
             ...prev,
-            { type: 'status', message: '⏸️ Agent 运行暂停。已启动实时通话接管。', timestamp: Date.now() }
+            { type: 'status', message: 'Agent 运行暂停。已启动实时通话接管。', timestamp: Date.now() }
           ]);
         }
       }
@@ -853,7 +853,7 @@ INSTRUCTION FOR TAKE-OVER:
 
       setGeminiLogs((prev) => [
         ...prev,
-        { type: 'status', message: '🔍 正在检查音频输入设备与权限...', timestamp: Date.now() }
+        { type: 'status', message: '正在检查音频输入设备与权限...', timestamp: Date.now() }
       ]);
 
       // 1. Check for hardware microphone device presence
@@ -866,7 +866,7 @@ INSTRUCTION FOR TAKE-OVER:
         console.warn('[LiveCall] No microphone hardware device detected!');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: '⚠️ 未检测到任何麦克风硬件设备。', timestamp: Date.now() }
+          { type: 'status', message: '未检测到任何麦克风硬件设备。', timestamp: Date.now() }
         ]);
         setMicErrorType('no-mic');
         setMicCheckOpen(true);
@@ -881,7 +881,7 @@ INSTRUCTION FOR TAKE-OVER:
         console.warn('[LiveCall] Microphone permission is denied or restricted by OS.');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: '⚠️ 麦克风权限已被系统拒绝。请在系统设置中授权。', timestamp: Date.now() }
+          { type: 'status', message: '麦克风权限已被系统拒绝。请在系统设置中授权。', timestamp: Date.now() }
         ]);
         setMicErrorType('permission-denied');
         setMicCheckOpen(true);
@@ -892,7 +892,7 @@ INSTRUCTION FOR TAKE-OVER:
         console.log('[LiveCall] Microphone permission is not determined. Requesting permission...');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: '🎙️ 正在向系统请求麦克风访问权限...', timestamp: Date.now() }
+          { type: 'status', message: '正在向系统请求麦克风访问权限...', timestamp: Date.now() }
         ]);
         const reqResult = await (window as any).adb.requestMicrophone();
         console.log('[LiveCall] requestMicrophone result:', reqResult);
@@ -900,7 +900,7 @@ INSTRUCTION FOR TAKE-OVER:
           console.warn('[LiveCall] Microphone permission request was not granted.');
           setGeminiLogs((prev) => [
             ...prev,
-            { type: 'status', message: '⚠️ 麦克风授权失败。', timestamp: Date.now() }
+            { type: 'status', message: '麦克风授权失败。', timestamp: Date.now() }
           ]);
           setMicErrorType('permission-denied');
           setMicCheckOpen(true);
@@ -931,7 +931,7 @@ INSTRUCTION FOR TAKE-OVER:
         console.warn('[LiveCall] Microphone device is not usable.');
         setGeminiLogs((prev) => [
           ...prev,
-          { type: 'status', message: '⚠️ 麦克风设备不可用（可能被其他程序独占或发生驱动错误）。', timestamp: Date.now() }
+          { type: 'status', message: '麦克风设备不可用（可能被其他程序独占或发生驱动错误）。', timestamp: Date.now() }
         ]);
         setMicErrorType('unusable');
         setMicCheckOpen(true);
@@ -941,7 +941,7 @@ INSTRUCTION FOR TAKE-OVER:
       console.log('[LiveCall] Mic is ready.');
       setGeminiLogs((prev) => [
         ...prev,
-        { type: 'status', message: '✅ 麦克风就绪。', timestamp: Date.now() }
+        { type: 'status', message: '麦克风就绪。', timestamp: Date.now() }
       ]);
 
       // All checks passed! Proceed with normal voice connection
