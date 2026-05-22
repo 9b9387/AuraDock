@@ -142,19 +142,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
-          {/* 🛠️ 调试用语音胶囊 (预览/样式调整用，确认后可删除) */}
-          {!isCallActive && (
-            <div className="border border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl p-0.5 flex items-center gap-1.5 bg-zinc-100/10 dark:bg-zinc-900/10">
-              <span className="text-[9px] text-zinc-400 dark:text-zinc-600 font-black tracking-tight select-none px-1 uppercase">调试预览:</span>
-              <VoiceCapsule 
-                geminiStatus="connected" 
-                textOnlyMode={false} 
-                waveBars={[30, 45, 60, 80, 95, 75, 50, 40, 65, 85, 70, 55, 45, 60, 75, 90, 85, 65, 50, 35, 45, 60]} 
-                handleStopLiveCall={() => alert('DEBUG: 点击了挂断')} 
-              />
-            </div>
-          )}
-
           {isCallActive ? (
             <VoiceCapsule 
               geminiStatus={geminiStatus}
