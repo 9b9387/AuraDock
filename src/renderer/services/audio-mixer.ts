@@ -17,9 +17,18 @@ export class AudioMixer {
   private targetSampleRate = 16000;
 
   private onMixedAudioCallback: ((pcmData: ArrayBuffer) => void) | null = null;
+  private onMicWaveCallback: ((bars: number[]) => void) | null = null;
+  private prevWaveBars: number[] = Array(24).fill(10);
 
   constructor(scrcpyInputQueue: ScrcpyAudioQueue) {
     this.scrcpyInputQueue = scrcpyInputQueue;
+  }
+
+  /**
+   * Set callback for microphone wave levels (24 channels).
+   */
+  public setOnMicWave(callback: ((bars: number[]) => void) | null): void {
+    this.onMicWaveCallback = callback;
   }
 
   /**
@@ -137,6 +146,35 @@ export class AudioMixer {
         if (this.onMixedAudioCallback) {
           this.onMixedAudioCallback(pcmBuffer);
         }
+
+        // Calculate 24 real-time microphone amplitude wave bars
+        if (this.onMicWaveCallback) {
+          const numBars = 24;
+          const chunkSize = Math.floor(count / numBars);
+          const newBars = new Array(numBars);
+          
+          for (let b = 0; b < numBars; b++) {
+            const start = b * chunkSize;
+            const end = Math.min(start + chunkSize, count);
+            let sumSq = 0;
+            for (let j = start; j < end; j++) {
+              const val = micData[j];
+              sumSq += val * val;
+            }
+            const rms = Math.sqrt(sumSq / (end - start || 1));
+            // Standard microphone values are small (usually 0.005 to 0.15 for normal talking)
+            // Let's multiply by a multiplier and scale to range [10, 100]
+            let height = Math.floor(rms * 450);
+            height = Math.max(10, Math.min(100, height));
+            
+            // Temporal smoothing to avoid sudden jitter
+            const prev = this.prevWaveBars[b] || 10;
+            const smoothHeight = Math.floor(prev * 0.5 + height * 0.5);
+            newBars[b] = smoothHeight;
+            this.prevWaveBars[b] = smoothHeight;
+          }
+          this.onMicWaveCallback(newBars);
+        }
       };
 
       // Connect Mic Node -> Recorder Node -> Destination (silence output)
@@ -189,6 +227,7 @@ export class AudioMixer {
 
     this.playedScrcpyQueue = [];
     this.onMixedAudioCallback = null;
+    this.onMicWaveCallback = null;
   }
 
   /**

@@ -123,7 +123,7 @@ export function App() {
   const [geminiStatus, setGeminiStatus] = useState<ConnectionStatus>('disconnected');
   const [geminiLogs, setGeminiLogs] = useState<LogEntry[]>([]);
   const [geminiChatInput, setGeminiChatInput] = useState('');
-  const [waveBars, setWaveBars] = useState<number[]>([10, 10, 10, 10, 10, 10, 10, 10]);
+  const [waveBars, setWaveBars] = useState<number[]>(Array(24).fill(10));
 
   const geminiLogsRef = useRef(geminiLogs);
   useEffect(() => {
@@ -362,16 +362,27 @@ export function App() {
   useEffect(() => {
     let animId: any;
     if (geminiStatus === 'connected') {
-      const updateWave = () => {
-        setWaveBars(Array.from({ length: 12 }, () => Math.floor(Math.random() * 80) + 15));
-        animId = setTimeout(updateWave, 100);
-      };
-      updateWave();
+      if (textOnlyMode) {
+        const updateWave = () => {
+          setWaveBars(Array.from({ length: 24 }, () => Math.floor(Math.random() * 20) + 10));
+          animId = setTimeout(updateWave, 150);
+        };
+        updateWave();
+      } else {
+        (audioMixer as any).setOnMicWave((bars: number[]) => {
+          setWaveBars(bars);
+        });
+      }
     } else {
-      setWaveBars([10, 10, 10, 10, 10, 10, 10, 10]);
+      setWaveBars(Array(24).fill(10));
     }
-    return () => clearTimeout(animId);
-  }, [geminiStatus]);
+    return () => {
+      clearTimeout(animId);
+      if (typeof (audioMixer as any).setOnMicWave === 'function') {
+        (audioMixer as any).setOnMicWave(null);
+      }
+    };
+  }, [geminiStatus, textOnlyMode]);
 
   // Wire Vision Agent Callback Events
   useEffect(() => {

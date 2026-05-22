@@ -30,7 +30,7 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
       ) : (
         <>
           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-          <div className="h-4 flex items-center gap-0.5 w-12 shrink-0">
+          <div className="h-4 flex items-center gap-0.5 w-24 shrink-0">
             {waveBars.map((height, i) => (
               <div 
                 key={i} 
@@ -138,7 +138,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               }
             }
           }}
-          className="block w-full h-28 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[160px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
+          className="block w-full h-28 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[220px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
@@ -149,7 +149,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <VoiceCapsule 
                 geminiStatus="connected" 
                 textOnlyMode={false} 
-                waveBars={[30, 80, 50, 90, 40]} 
+                waveBars={[30, 45, 60, 80, 95, 75, 50, 40, 65, 85, 70, 55, 45, 60, 75, 90, 85, 65, 50, 35, 45, 60, 50, 30]} 
                 handleStopLiveCall={() => alert('DEBUG: 点击了挂断')} 
               />
             </div>
