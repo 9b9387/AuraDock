@@ -1033,6 +1033,7 @@ INSTRUCTION FOR TAKE-OVER:
               waveBars={waveBars}
               handleStartLiveCall={handleStartLiveCall}
               handleStopLiveCall={handleStopLiveCall}
+              textOnlyMode={textOnlyMode}
             />
           </div>
         )}

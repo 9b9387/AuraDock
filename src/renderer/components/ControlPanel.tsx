@@ -1,25 +1,46 @@
 import React from 'react';
-import { Send, Square, Mic, PhoneOff } from 'lucide-react';
+import { Send, Square, Mic, PhoneOff, Loader2, MicOff } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
 
 interface VoiceCapsuleProps {
+  geminiStatus: ConnectionStatus;
+  textOnlyMode: boolean;
   waveBars: number[];
   handleStopLiveCall: () => void;
 }
 
-const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({ waveBars, handleStopLiveCall }) => {
+const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({ 
+  geminiStatus, 
+  textOnlyMode, 
+  waveBars, 
+  handleStopLiveCall 
+}) => {
   return (
     <div className="flex items-center gap-2 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/45 border border-emerald-200 dark:border-emerald-500/30 rounded-full h-8 shadow-lg shrink-0">
-      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-      <div className="h-3 flex items-center gap-0.5 w-10 shrink-0">
-        {waveBars.map((height, i) => (
-          <div 
-            key={i} 
-            style={{ height: `${height}%` }} 
-            className="w-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all" 
-          />
-        ))}
-      </div>
+      {geminiStatus === 'connecting' ? (
+        <>
+          <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">连接中...</span>
+        </>
+      ) : textOnlyMode ? (
+        <>
+          <MicOff className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">已静音</span>
+        </>
+      ) : (
+        <>
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          <div className="h-3 flex items-center gap-0.5 w-10 shrink-0">
+            {waveBars.map((height, i) => (
+              <div 
+                key={i} 
+                style={{ height: `${height}%` }} 
+                className="w-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all" 
+              />
+            ))}
+          </div>
+        </>
+      )}
       <div className="w-[1px] h-3 bg-zinc-200 dark:bg-emerald-500/20 mx-0.5" />
       <button 
         onClick={handleStopLiveCall} 
@@ -46,6 +67,7 @@ interface ControlPanelProps {
   waveBars: number[];
   handleStartLiveCall: () => void;
   handleStopLiveCall: () => void;
+  textOnlyMode: boolean;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -62,16 +84,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   waveBars,
   handleStartLiveCall,
   handleStopLiveCall,
+  textOnlyMode,
 }) => {
   const isConnected = geminiStatus === 'connected';
-  const inputValue = isConnected ? geminiChatInput : agentInput;
-  const setInputValue = isConnected ? setGeminiChatInput : setAgentInput;
-  const placeholderText = isConnected 
-    ? "发送文本指令给实时语音助手..." 
-    : "给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)";
+  const isConnecting = geminiStatus === 'connecting';
+  const isCallActive = isConnected || isConnecting;
+
+  const inputValue = isCallActive ? geminiChatInput : agentInput;
+  const setInputValue = isCallActive ? setGeminiChatInput : setAgentInput;
+  const placeholderText = isConnecting
+    ? "正在建立连接，请稍候..."
+    : isConnected
+      ? "发送文本指令给实时语音助手..."
+      : "给 Agent 发送指令... (例如：打开浏览器搜索最新AI新闻)";
 
   const handleSend = () => {
-    if (isConnected) {
+    if (isCallActive) {
       handleSendLiveChatText();
     } else {
       handleStartAgent();
@@ -79,14 +107,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   // 1. Determine if button should act as a Stop button
-  const isStopButton = !isConnected && agentRunning;
+  const isStopButton = !isCallActive && agentRunning;
 
   // 2. Compute disabled state based on role
-  const isSendDisabled = !inputValue.trim() || (!isConnected && !activeSerial);
+  const isSendDisabled = isConnecting || !inputValue.trim() || (!isCallActive && !activeSerial);
   const isButtonDisabled = isStopButton ? false : isSendDisabled;
 
   // 3. Unified click handler
-  const onButtonClick = (e: React.MouseEvent) => {
+  const onButtonClick = () => {
     if (isStopButton) {
       handleGlobalStop();
     } else {
@@ -101,12 +129,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={placeholderText}
-          disabled={!isConnected && (agentRunning || !activeSerial)}
+          disabled={isConnecting || (!isCallActive && (agentRunning || !activeSerial))}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               if (!isButtonDisabled) {
-                onButtonClick(e as any);
+                onButtonClick();
               }
             }
           }}
@@ -114,8 +142,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
-          {isConnected ? (
-            <VoiceCapsule waveBars={waveBars} handleStopLiveCall={handleStopLiveCall} />
+          {isCallActive ? (
+            <VoiceCapsule 
+              geminiStatus={geminiStatus}
+              textOnlyMode={textOnlyMode}
+              waveBars={waveBars} 
+              handleStopLiveCall={handleStopLiveCall} 
+            />
           ) : (
             <button
               onClick={handleStartLiveCall}
@@ -135,7 +168,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 ? "bg-rose-600 hover:bg-rose-500 text-white animate-pulse" 
                 : "bg-emerald-600 hover:bg-emerald-500 text-white shadow"
             }`}
-            title={isStopButton ? "紧急停止 Agent" : (isConnected ? "发送文本" : "发送任务指令")}
+            title={isStopButton ? "紧急停止 Agent" : (isCallActive ? "发送文本" : "发送任务指令")}
           >
             {isStopButton ? (
               <Square className="w-3.5 h-3.5 fill-white text-transparent" />
