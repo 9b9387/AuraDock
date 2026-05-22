@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Square, Mic, PhoneOff, Loader2, MicOff } from 'lucide-react';
+import { Send, Square, PhoneOff, Loader2, MicOff, Play, Power, HelpCircle, Sparkles } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
 
 interface VoiceCapsuleProps {
@@ -138,7 +138,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               }
             }
           }}
-          className="block w-full h-24 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[150px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
+          className="block w-full h-28 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[160px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
@@ -153,17 +153,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <button
               onClick={handleStartLiveCall}
               disabled={!activeSerial}
-              className="flex items-center justify-center p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-emerald-600 dark:text-emerald-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-30 cursor-pointer"
+              className="flex items-center justify-center p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-emerald-600 dark:text-emerald-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-30 cursor-pointer"
               title="开启实时语音通话"
             >
-              <Mic className="w-3.5 h-3.5" />
+              <Sparkles className="w-4 h-4" />
             </button>
           )}
 
           <button
             onClick={onButtonClick}
             disabled={isButtonDisabled}
-            className={`flex items-center justify-center p-2.5 rounded-xl transition-all disabled:opacity-30 active:scale-95 cursor-pointer ${
+            className={`flex items-center justify-center p-3 rounded-xl transition-all disabled:opacity-30 active:scale-95 cursor-pointer ${
               isStopButton 
                 ? "bg-rose-600 hover:bg-rose-500 text-white animate-pulse" 
                 : "bg-emerald-600 hover:bg-emerald-500 text-white shadow"
@@ -171,9 +171,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             title={isStopButton ? "紧急停止 Agent" : (isCallActive ? "发送文本" : "发送任务指令")}
           >
             {isStopButton ? (
-              <Square className="w-3.5 h-3.5 fill-white text-transparent" />
+              <Power className="w-4 h-4" />
             ) : (
-              <Send className="w-3.5 h-3.5 fill-white text-transparent" />
+              <Play className="w-4 h-4 fill-current" />
             )}
           </button>
         </div>
