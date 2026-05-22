@@ -6,7 +6,6 @@ import { TitleBar } from './renderer/components/TitleBar';
 import { DeviceSelector } from './renderer/components/DeviceSelector';
 import { ScreenMirror } from './renderer/components/ScreenMirror';
 import { NavigationBar } from './renderer/components/NavigationBar';
-import { LiveCallController } from './renderer/components/LiveCallController';
 import { UnifiedLogs } from './renderer/components/UnifiedLogs';
 import { ControlPanel } from './renderer/components/ControlPanel';
 import { SettingsModal } from './renderer/components/SettingsModal';
@@ -210,11 +209,6 @@ export function App() {
 
     // Increase interval: Attempt 1 = 2s, Attempt 2 = 4s, Attempt 3 = 8s
     const delay = attempt === 1 ? 2000 : attempt === 2 ? 4000 : 8000;
-    
-    setAgentLogs((prev) => [
-      ...prev,
-      { type: 'status', message: `正在尝试第 ${attempt}/3 次自动重新连接，等待时间 ${delay / 1000}s...`, timestamp: Date.now() }
-    ]);
 
     if (reconnectTimeoutIdRef.current) clearTimeout(reconnectTimeoutIdRef.current);
     if (reconnectCheckTimeoutIdRef.current) clearTimeout(reconnectCheckTimeoutIdRef.current);
@@ -236,10 +230,6 @@ export function App() {
         }
       } else {
         console.warn(`[Renderer] Attempt #${attempt}: Device ${serial} is not connected via USB. Skipping scrcpy request.`);
-        setAgentLogs((prev) => [
-          ...prev,
-          { type: 'status', message: `第 ${attempt}/3 次重连尝试：未检测到 USB 连接，等待下一次尝试...`, timestamp: Date.now() }
-        ]);
       }
 
       reconnectCheckTimeoutIdRef.current = setTimeout(() => {
@@ -1023,22 +1013,12 @@ INSTRUCTION FOR TAKE-OVER:
               {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-auto"></span>}
             </div>
 
-            {/* 1. TOP WIDGET: Real-time Voice Call Controller */}
-            <LiveCallController
-              activeSerial={activeSerial}
-              geminiStatus={geminiStatus}
-              waveBars={waveBars}
-              handleStartLiveCall={handleStartLiveCall}
-              handleStopLiveCall={handleStopLiveCall}
-              textOnlyMode={textOnlyMode}
-            />
-
-            {/* 2. MIDDLE SECTION: Unified Chronological Log Feed */}
+            {/* 1. MIDDLE SECTION: Unified Chronological Log Feed */}
             <UnifiedLogs
               unifiedLogs={unifiedLogs}
             />
 
-            {/* 3. BOTTOM PANEL: Controls & Input Panel */}
+            {/* 2. BOTTOM PANEL: Controls & Input Panel */}
             <ControlPanel
               geminiStatus={geminiStatus}
               geminiChatInput={geminiChatInput}
@@ -1050,6 +1030,9 @@ INSTRUCTION FOR TAKE-OVER:
               activeSerial={activeSerial}
               handleStartAgent={handleStartAgent}
               handleGlobalStop={handleGlobalStop}
+              waveBars={waveBars}
+              handleStartLiveCall={handleStartLiveCall}
+              handleStopLiveCall={handleStopLiveCall}
             />
           </div>
         )}
