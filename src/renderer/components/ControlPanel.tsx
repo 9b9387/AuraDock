@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Square, PhoneOff, Loader2, MicOff, Play, Power, HelpCircle, Sparkles } from 'lucide-react';
+import { Send, Square, PhoneOff, Loader2, MicOff, Play, Power, HelpCircle, Sparkles, X } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
 
 interface VoiceCapsuleProps {
@@ -47,7 +47,7 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
         className="text-rose-600 dark:text-rose-400 hover:text-rose-500 transition-colors cursor-pointer"
         title="挂断通话"
       >
-        <PhoneOff className="w-4 h-4" />
+        <X className="w-4 h-4" />
       </button>
     </div>
   );
