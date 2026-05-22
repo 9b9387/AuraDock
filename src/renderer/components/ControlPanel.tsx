@@ -16,7 +16,7 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
   handleStopLiveCall 
 }) => {
   return (
-    <div className="flex items-center gap-3 px-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 rounded-xl h-10 shadow-lg dark:shadow-none shrink-0">
+    <div className="flex items-center gap-2.5 px-3 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 rounded-xl h-10 shadow-lg dark:shadow-none shrink-0">
       {geminiStatus === 'connecting' ? (
         <>
           <Loader2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
@@ -30,7 +30,7 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
       ) : (
         <>
           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-          <div className="h-4 flex items-center gap-0.5 w-24 shrink-0">
+          <div className="h-4 flex items-center gap-0.5 shrink-0">
             {waveBars.map((height, i) => (
               <div 
                 key={i} 
@@ -149,7 +149,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <VoiceCapsule 
                 geminiStatus="connected" 
                 textOnlyMode={false} 
-                waveBars={[30, 45, 60, 80, 95, 75, 50, 40, 65, 85, 70, 55, 45, 60, 75, 90, 85, 65, 50, 35, 45, 60, 50, 30]} 
+                waveBars={[30, 45, 60, 80, 95, 75, 50, 40, 65, 85, 70, 55, 45, 60, 75, 90, 85, 65, 50, 35, 45, 60]} 
                 handleStopLiveCall={() => alert('DEBUG: 点击了挂断')} 
               />
             </div>
