@@ -16,38 +16,38 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
   handleStopLiveCall 
 }) => {
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/45 border border-emerald-200 dark:border-emerald-500/30 rounded-full h-8 shadow-lg shrink-0">
+    <div className="flex items-center gap-3 px-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 rounded-xl h-10 shadow-lg dark:shadow-none shrink-0">
       {geminiStatus === 'connecting' ? (
         <>
-          <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
-          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">连接中...</span>
+          <Loader2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">连接中...</span>
         </>
       ) : textOnlyMode ? (
         <>
-          <MicOff className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">已静音</span>
+          <MicOff className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">已静音</span>
         </>
       ) : (
         <>
           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-          <div className="h-3 flex items-center gap-0.5 w-10 shrink-0">
+          <div className="h-4 flex items-center gap-0.5 w-12 shrink-0">
             {waveBars.map((height, i) => (
               <div 
                 key={i} 
                 style={{ height: `${height}%` }} 
-                className="w-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all" 
+                className="w-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-100" 
               />
             ))}
           </div>
         </>
       )}
-      <div className="w-[1px] h-3 bg-zinc-200 dark:bg-emerald-500/20 mx-0.5" />
+      <div className="w-[1px] h-4 bg-zinc-200 dark:bg-emerald-500/20 mx-0.5" />
       <button 
         onClick={handleStopLiveCall} 
-        className="text-rose-600 dark:text-rose-400 hover:text-rose-500 cursor-pointer"
+        className="text-rose-600 dark:text-rose-400 hover:text-rose-500 transition-colors cursor-pointer"
         title="挂断通话"
       >
-        <PhoneOff className="w-3.5 h-3.5" />
+        <PhoneOff className="w-4 h-4" />
       </button>
     </div>
   );
@@ -142,6 +142,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         />
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
+          {/* 🛠️ 调试用语音胶囊 (预览/样式调整用，确认后可删除) */}
+          {!isCallActive && (
+            <div className="border border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl p-0.5 flex items-center gap-1.5 bg-zinc-100/10 dark:bg-zinc-900/10">
+              <span className="text-[9px] text-zinc-400 dark:text-zinc-600 font-black tracking-tight select-none px-1 uppercase">调试预览:</span>
+              <VoiceCapsule 
+                geminiStatus="connected" 
+                textOnlyMode={false} 
+                waveBars={[30, 80, 50, 90, 40]} 
+                handleStopLiveCall={() => alert('DEBUG: 点击了挂断')} 
+              />
+            </div>
+          )}
+
           {isCallActive ? (
             <VoiceCapsule 
               geminiStatus={geminiStatus}
