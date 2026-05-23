@@ -180,7 +180,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
                 >
                   <option value="models/gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
-                  <option value="models/gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -190,9 +189,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => setLocalSettings({ ...localSettings, visionAgentModel: e.target.value })}
                   className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
                 >
+                  <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                   <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
                   <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash</option>
                 </select>
               </div>
             </div>

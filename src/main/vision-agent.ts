@@ -65,16 +65,20 @@ export class VisionAgent implements AgentContext {
   private currentSerial: string | null = null;
   private screenshotPromise: { resolve: (data: string) => void; reject: (err: any) => void } | null = null;
   private loop: AgentLoop | null = null;
+  private activeModel: string | null = null;
 
   constructor() {
     this.setupIpc();
   }
 
   private async ensureAgent() {
-    if (this.agent) return;
-    this.log('status', 'Initializing ADK Agent...');
+    const settings = ConfigManager.loadSettings();
+    const modelName = settings.visionAgentModel || 'gemini-3-flash-preview';
+
+    if (this.agent && this.activeModel === modelName) return;
+
+    this.log('status', `Initializing ADK Agent using model: ${modelName}...`);
     try {
-      const settings = ConfigManager.loadSettings();
       const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
       if (!apiKey) {
         throw new Error('Missing GEMINI_API_KEY or GOOGLE_API_KEY in configuration/environment/.env');
@@ -89,8 +93,6 @@ export class VisionAgent implements AgentContext {
       
       const registry = new ToolRegistry(this);
       const tools = registry.getTools();
-
-      const modelName = settings.visionAgentModel || 'gemini-3-flash-preview';
 
       this.agent = new LlmAgent({
         name: 'VisionMobileAgent',
@@ -109,8 +111,9 @@ TASK COMPLETION:
         tools: tools,
       });
 
+      this.activeModel = modelName;
       this.loop = new AgentLoop(this, this.agent);
-      this.log('status', 'Agent successfully initialized.');
+      this.log('status', `Agent successfully initialized with model: ${modelName}.`);
     } catch (e: any) {
       console.error('[VisionAgent] Failed to load ADK:', e);
       this.log('status', `Agent Initialization Failed: ${e.message}`);
@@ -137,6 +140,7 @@ TASK COMPLETION:
       try {
         await this.ensureAgent();
         if (!this.loop) throw new Error('Agent failed to initialize');
+        this.log('status', `Executing task using model: ${this.activeModel}`);
         this.notifyStatus(true);
         await this.loop.run(task);
       } catch (e: any) {

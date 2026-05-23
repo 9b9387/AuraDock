@@ -1,5 +1,5 @@
 import React from 'react';
-import { Triangle, Circle, Square, Camera, Link2Off } from 'lucide-react';
+import { Triangle, Circle, Square, Camera, Link2Off, Volume2, VolumeX } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface NavigationBarProps {
@@ -7,6 +7,8 @@ interface NavigationBarProps {
   executeSystemKey: (key: 'BACK' | 'HOME' | 'APP_SWITCH') => void;
   handleTakeScreenshot: () => void;
   disconnectScrcpy: () => void;
+  audioEnabled: boolean;
+  setAudioEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const NavigationBar: React.FC<NavigationBarProps> = ({
@@ -14,13 +16,28 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   executeSystemKey,
   handleTakeScreenshot,
   disconnectScrcpy,
+  audioEnabled,
+  setAudioEnabled,
 }) => {
   if (!activeSerial) return null;
 
   return (
     <div className="mt-4 flex items-center justify-between px-4 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 z-10 shrink-0 transition-colors duration-200">
-      {/* Left Slot */}
-      <div className="w-20" />
+      {/* Left Slot: Audio output toggle switch */}
+      <div className="w-20 flex justify-start items-center">
+        <Tooltip content={audioEnabled ? "关闭手机音频输出" : "开启手机音频输出"} position="top">
+          <button 
+            onClick={() => setAudioEnabled(prev => !prev)}
+            className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer ${
+              audioEnabled 
+                ? "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40" 
+                : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800/80"
+            }`}
+          >
+            {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+        </Tooltip>
+      </div>
 
       {/* Navigation Keys Middle */}
       <div className="flex items-center gap-8">

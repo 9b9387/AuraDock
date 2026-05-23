@@ -6,6 +6,11 @@ export class AudioMixer {
   private micSourceNode: MediaStreamAudioSourceNode | null = null;
   private scrcpyPlayerNode: ScriptProcessorNode | null = null;
   private recorderNode: ScriptProcessorNode | null = null;
+
+  // Dedicated preview player states (no mic acquisition required)
+  private previewAudioCtx: AudioContext | null = null;
+  private previewPlayerNode: ScriptProcessorNode | null = null;
+  private localPlaybackEnabled = true;
   
   private scrcpyInputQueue: ScrcpyAudioQueue;
   private playedScrcpyQueue: number[] = [];
@@ -44,6 +49,7 @@ export class AudioMixer {
    * Start recording and mixing.
    */
   public async start(onMixedAudio: (pcmData: ArrayBuffer) => void): Promise<void> {
+    this.stopPreview(); // Ensure preview playback is stopped before starting the mixer
     this.onMixedAudioCallback = onMixedAudio;
     this.playedScrcpyQueue = [];
 
@@ -96,8 +102,13 @@ export class AudioMixer {
         const { left, right } = this.scrcpyInputQueue.read(count);
 
         // Copy to output channels for local playback
-        outL.set(left);
-        outR.set(right);
+        if (this.localPlaybackEnabled) {
+          outL.set(left);
+          outR.set(right);
+        } else {
+          outL.fill(0);
+          outR.fill(0);
+        }
 
         // Mix to mono and write to the played queue for Gemini mixing
         const mono = new Float32Array(count);
@@ -195,23 +206,89 @@ export class AudioMixer {
   }
 
   /**
+   * Start preview audio playback (no mic, no mixing, just local speaker output).
+   */
+  public async startPreview(): Promise<void> {
+    if (this.previewAudioCtx) {
+      console.log('[AudioMixer] Preview audio already running');
+      return;
+    }
+
+    try {
+      this.previewAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (this.previewAudioCtx.state === 'suspended') {
+        await this.previewAudioCtx.resume();
+      }
+
+      console.log(`[AudioMixer] Preview AudioContext initialized at ${this.previewAudioCtx.sampleRate}Hz`);
+
+      this.previewPlayerNode = this.previewAudioCtx.createScriptProcessor(this.bufferSize, 0, 2);
+      this.previewPlayerNode.onaudioprocess = (e) => {
+        const outputBuffer = e.outputBuffer;
+        const outL = outputBuffer.getChannelData(0);
+        const outR = outputBuffer.getChannelData(1);
+
+        const count = outputBuffer.length;
+        const { left, right } = this.scrcpyInputQueue.read(count);
+
+        if (this.localPlaybackEnabled) {
+          outL.set(left);
+          outR.set(right);
+        } else {
+          outL.fill(0);
+          outR.fill(0);
+        }
+      };
+
+      this.previewPlayerNode.connect(this.previewAudioCtx.destination);
+      console.log('[AudioMixer] Preview audio player connected');
+    } catch (err) {
+      console.error('[AudioMixer] Failed to start preview audio:', err);
+      this.stopPreview();
+    }
+  }
+
+  /**
+   * Stop preview audio playback.
+   */
+  public stopPreview(): void {
+    console.log('[AudioMixer] Stopping preview audio...');
+    if (this.previewPlayerNode) {
+      try { this.previewPlayerNode.disconnect(); } catch (e) { /* ignore */ }
+      this.previewPlayerNode = null;
+    }
+    if (this.previewAudioCtx) {
+      try { this.previewAudioCtx.close(); } catch (e) { /* ignore */ }
+      this.previewAudioCtx = null;
+    }
+  }
+
+  /**
+   * Set local playback enabled state (mute/unmute local phone audio output).
+   */
+  public setLocalPlaybackEnabled(enabled: boolean): void {
+    this.localPlaybackEnabled = enabled;
+    console.log(`[AudioMixer] Local playback enabled state set to: ${enabled}`);
+  }
+
+  /**
    * Stop recording and mixing.
    */
   public stop(): void {
     console.log('[AudioMixer] Stopping audio mixer...');
     
     if (this.scrcpyPlayerNode) {
-      try { this.scrcpyPlayerNode.disconnect(); } catch (e) {}
+      try { this.scrcpyPlayerNode.disconnect(); } catch (e) { /* ignore */ }
       this.scrcpyPlayerNode = null;
     }
 
     if (this.recorderNode) {
-      try { this.recorderNode.disconnect(); } catch (e) {}
+      try { this.recorderNode.disconnect(); } catch (e) { /* ignore */ }
       this.recorderNode = null;
     }
 
     if (this.micSourceNode) {
-      try { this.micSourceNode.disconnect(); } catch (e) {}
+      try { this.micSourceNode.disconnect(); } catch (e) { /* ignore */ }
       this.micSourceNode = null;
     }
 
@@ -221,7 +298,7 @@ export class AudioMixer {
     }
 
     if (this.audioCtx) {
-      try { this.audioCtx.close(); } catch (e) {}
+      try { this.audioCtx.close(); } catch (e) { /* ignore */ }
       this.audioCtx = null;
     }
 
@@ -267,7 +344,7 @@ export class AudioMixer {
     const buffer = new ArrayBuffer(samples.length * 2);
     const view = new DataView(buffer);
     for (let i = 0; i < samples.length; i++) {
-      let s = Math.max(-1, Math.min(1, samples[i]));
+      const s = Math.max(-1, Math.min(1, samples[i]));
       // Convert to Int16
       const val = s < 0 ? s * 0x8000 : s * 0x7fff;
       view.setInt16(i * 2, val, true); // Little Endian

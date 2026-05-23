@@ -53,6 +53,7 @@ export function App() {
   const [activeDeviceModel, setActiveDeviceModel] = useState<string | null>(null);
   const [scrcpyStatus, setScrcpyStatus] = useState<string>('Disconnected');
   const [scrcpyError, setScrcpyError] = useState<string | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
 
   // Load configuration from Electron on mount
   useEffect(() => {
@@ -161,6 +162,26 @@ export function App() {
   useEffect(() => {
     activeSerialRef.current = activeSerial;
   }, [activeSerial]);
+
+  // Manage Scrcpy Preview Audio Playback based on connection state and user preference
+  useEffect(() => {
+    if (activeSerial && geminiStatus !== 'connected' && audioEnabled) {
+      console.log('[Renderer] Starting scrcpy preview audio...');
+      audioMixer.startPreview().catch((err) => {
+        console.error('[Renderer] Failed to start preview audio:', err);
+      });
+    } else {
+      console.log('[Renderer] Stopping scrcpy preview audio...');
+      audioMixer.stopPreview();
+    }
+
+    // Always update local playback enablement state in audioMixer
+    audioMixer.setLocalPlaybackEnabled(audioEnabled);
+
+    return () => {
+      audioMixer.stopPreview();
+    };
+  }, [activeSerial, geminiStatus, audioEnabled]);
 
   const activeDeviceModelRef = useRef(activeDeviceModel);
   useEffect(() => {
@@ -1052,6 +1073,8 @@ INSTRUCTION FOR TAKE-OVER:
             executeSystemKey={executeSystemKey}
             handleTakeScreenshot={handleTakeScreenshot}
             disconnectScrcpy={disconnectScrcpy}
+            audioEnabled={audioEnabled}
+            setAudioEnabled={setAudioEnabled}
           />
         </div>
 
