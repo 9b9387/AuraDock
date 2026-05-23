@@ -6,7 +6,7 @@ interface ScreenMirrorProps {
   activeSerial: string | null;
   scrcpyError: string | null;
   scrcpyStatus: string;
-  handleCanvasMouseEvent: (e: React.MouseEvent<HTMLCanvasElement>, action: number) => void;
+  onCanvasMouseDown: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   reconnecting?: boolean;
   reconnectAttempt?: number;
   reconnectFailed?: boolean;
@@ -19,7 +19,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
   activeSerial,
   scrcpyError,
   scrcpyStatus,
-  handleCanvasMouseEvent,
+  onCanvasMouseDown,
   reconnecting = false,
   reconnectAttempt = 0,
   reconnectFailed = false,
@@ -99,9 +99,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
       <div className={`relative w-full h-full flex items-center justify-center ${!activeSerial ? 'hidden' : ''} ${isConnecting || reconnecting || reconnectFailed ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100 transition-all duration-300'}`}>
         <canvas
           ref={canvasRef}
-          onMouseDown={(e) => handleCanvasMouseEvent(e, 0)}
-          onMouseMove={(e) => { if (e.buttons > 0) handleCanvasMouseEvent(e, 2); }}
-          onMouseUp={(e) => handleCanvasMouseEvent(e, 1)}
+          onMouseDown={onCanvasMouseDown}
           className="max-w-full max-h-[75vh] shadow-2xl rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-crosshair object-contain bg-black z-10"
         />
       </div>

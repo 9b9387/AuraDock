@@ -605,25 +605,56 @@ export function App() {
     videoHeightRef.current = 0;
   }, []);
 
-  // Handle Touch/Mouse Click coordinates over Scrcpy Canvas
-  const handleCanvasMouseEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement>, action: number) => {
+  // Handle Touch/Mouse Click coordinates over Scrcpy Canvas (with robust global drag tracking)
+  const handleCanvasMouseDown = useCallback((mouseDownEvent: React.MouseEvent<HTMLCanvasElement>) => {
     if (!currentPortRef.current || videoWidthRef.current === 0 || !canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - rect.left) / rect.width) * videoWidthRef.current);
-    const y = Math.floor(((e.clientY - rect.top) / rect.height) * videoHeightRef.current);
+    mouseDownEvent.preventDefault(); // Prevent standard browser drag artifacts
 
-    currentPortRef.current.postMessage({
-      type: 'control',
-      data: {
-        action,
-        pointerX: x,
-        pointerY: y,
-        videoWidth: videoWidthRef.current,
-        videoHeight: videoHeightRef.current,
-        pressure: action === 1 ? 0 : 1,
-      }
-    });
+    const sendControlMessage = (action: number, clientX: number, clientY: number) => {
+      if (!currentPortRef.current || videoWidthRef.current === 0 || !canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+
+      // Calculate relative coordinates
+      const rawX = ((clientX - rect.left) / rect.width) * videoWidthRef.current;
+      const rawY = ((clientY - rect.top) / rect.height) * videoHeightRef.current;
+
+      // Clamp coordinates to video dimensions to ensure swiping stays on screen
+      const x = Math.max(0, Math.min(videoWidthRef.current - 1, Math.floor(rawX)));
+      const y = Math.max(0, Math.min(videoHeightRef.current - 1, Math.floor(rawY)));
+
+      currentPortRef.current.postMessage({
+        type: 'control',
+        data: {
+          action,
+          pointerX: x,
+          pointerY: y,
+          videoWidth: videoWidthRef.current,
+          videoHeight: videoHeightRef.current,
+          pressure: action === 1 ? 0 : 1,
+        }
+      });
+    };
+
+    // 1. Send Mouse Down pointer event (Action 0)
+    sendControlMessage(0, mouseDownEvent.clientX, mouseDownEvent.clientY);
+
+    // 2. Define global handlers to track drag outside the canvas
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      sendControlMessage(2, e.clientX, e.clientY);
+    };
+
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      sendControlMessage(1, e.clientX, e.clientY);
+
+      // Clean up global listeners immediately once pointer is released
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+
+    // 3. Bind global listeners to the window object
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
   }, []);
 
   // Android Navigation bar key execution
@@ -1058,7 +1089,7 @@ INSTRUCTION FOR TAKE-OVER:
               activeSerial={activeSerial}
               scrcpyError={scrcpyError}
               scrcpyStatus={scrcpyStatus}
-              handleCanvasMouseEvent={handleCanvasMouseEvent}
+              onCanvasMouseDown={handleCanvasMouseDown}
               reconnecting={reconnecting}
               reconnectAttempt={reconnectAttempt}
               reconnectFailed={reconnectFailed}
