@@ -13,7 +13,6 @@ export class AudioMixer {
   private localPlaybackEnabled = true;
   
   private scrcpyInputQueue: ScrcpyAudioQueue;
-  private playedScrcpyQueue: number[] = [];
 
   // Configuration options to prevent hardcoding
   private micGain = 1.0;
@@ -51,12 +50,9 @@ export class AudioMixer {
   public async start(onMixedAudio: (pcmData: ArrayBuffer) => void): Promise<void> {
     this.stopPreview(); // Ensure preview playback is stopped before starting the mixer
     this.onMixedAudioCallback = onMixedAudio;
-    this.playedScrcpyQueue = [];
 
     try {
       // 1. Initialize AudioContext
-      // Note: We don't specify sampleRate here, we let the browser select its native rate
-      // (usually 44.1kHz or 48kHz) and downsample manually for maximum compatibility.
       this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
@@ -90,18 +86,21 @@ export class AudioMixer {
 
       this.micSourceNode = this.audioCtx.createMediaStreamSource(this.micStream);
 
-      // 3. Create Scrcpy Stereo Player Node
-      // ScriptProcessorNode parameters: bufferSize, numInputChannels, numOutputChannels
-      this.scrcpyPlayerNode = this.audioCtx.createScriptProcessor(this.bufferSize, 0, 2);
-      this.scrcpyPlayerNode.onaudioprocess = (e) => {
+      // 3. Create Recording and Unified Stereo Mixing Node
+      // ScriptProcessorNode parameters: bufferSize, numInputChannels (1, mono mic), numOutputChannels (2, stereo speakers)
+      this.recorderNode = this.audioCtx.createScriptProcessor(this.bufferSize, 1, 2);
+      this.recorderNode.onaudioprocess = (e) => {
+        const inputBuffer = e.inputBuffer;
+        const micData = inputBuffer.getChannelData(0); // Mono microphone input
+
         const outputBuffer = e.outputBuffer;
-        const outL = outputBuffer.getChannelData(0);
-        const outR = outputBuffer.getChannelData(1);
+        const outL = outputBuffer.getChannelData(0); // Left speaker output
+        const outR = outputBuffer.getChannelData(1); // Right speaker output
 
         const count = outputBuffer.length;
         const { left, right } = this.scrcpyInputQueue.read(count);
 
-        // Copy to output channels for local playback
+        // A. Copy Scrcpy audio to output channels for local playback (if local playback is enabled)
         if (this.localPlaybackEnabled) {
           outL.set(left);
           outR.set(right);
@@ -110,55 +109,29 @@ export class AudioMixer {
           outR.fill(0);
         }
 
-        // Mix to mono and write to the played queue for Gemini mixing
+        // B. Mix Scrcpy audio (mono downmixed) and Microphone input for Gemini Live
         const mono = new Float32Array(count);
         for (let i = 0; i < count; i++) {
           mono[i] = (left[i] + right[i]) / 2.0;
         }
 
-        // Push played mono samples to played queue
-        // Limit queue size to avoid memory leaks if recorder isn't running
-        if (this.playedScrcpyQueue.length < this.audioCtx!.sampleRate * 2) {
-          this.playedScrcpyQueue.push(...Array.from(mono));
-        }
-      };
-
-      // Connect Scrcpy Player directly to destination so user can hear phone audio
-      this.scrcpyPlayerNode.connect(this.audioCtx.destination);
-
-      // 4. Create Recording and Mixing Node
-      this.recorderNode = this.audioCtx.createScriptProcessor(this.bufferSize, 1, 1);
-      this.recorderNode.onaudioprocess = (e) => {
-        const inputBuffer = e.inputBuffer;
-        const micData = inputBuffer.getChannelData(0); // Mono microphone
-        const count = inputBuffer.length;
-
-        // Pull corresponding Scrcpy played mono samples
-        const scrcpyData = new Float32Array(count);
-        const availableScrcpy = Math.min(count, this.playedScrcpyQueue.length);
-        for (let i = 0; i < availableScrcpy; i++) {
-          scrcpyData[i] = this.playedScrcpyQueue[i];
-        }
-        this.playedScrcpyQueue.splice(0, availableScrcpy);
-
-        // Mix both sources
         const mixed = new Float32Array(count);
         for (let i = 0; i < count; i++) {
-          mixed[i] = (micData[i] * this.micGain) + (scrcpyData[i] * this.scrcpyGain);
+          mixed[i] = (micData[i] * this.micGain) + (mono[i] * this.scrcpyGain);
         }
 
-        // Downsample the mixed audio to 16,000Hz for Gemini
+        // C. Downsample the mixed audio to 16,000Hz for Gemini
         const downsampled = this.downsample(mixed, this.audioCtx!.sampleRate, this.targetSampleRate);
 
-        // Convert Float32 downsampled data to Int16 PCM ArrayBuffer
+        // D. Convert Float32 downsampled data to Int16 PCM ArrayBuffer
         const pcmBuffer = this.float32ToInt16(downsampled);
 
-        // Emit via callback
+        // E. Emit via callback
         if (this.onMixedAudioCallback) {
           this.onMixedAudioCallback(pcmBuffer);
         }
 
-        // Calculate 24 real-time microphone amplitude wave bars
+        // F. Calculate 24 real-time microphone amplitude wave bars for UI
         if (this.onMicWaveCallback) {
           const numBars = 24;
           const chunkSize = Math.floor(count / numBars);
@@ -173,12 +146,10 @@ export class AudioMixer {
               sumSq += val * val;
             }
             const rms = Math.sqrt(sumSq / (end - start || 1));
-            // Standard microphone values are small (usually 0.005 to 0.15 for normal talking)
-            // Let's multiply by a multiplier and scale to range [10, 100]
+            // Scale and clamp rms for visualization
             let height = Math.floor(rms * 450);
             height = Math.max(10, Math.min(100, height));
             
-            // Temporal smoothing to avoid sudden jitter
             const prev = this.prevWaveBars[b] || 10;
             const smoothHeight = Math.floor(prev * 0.5 + height * 0.5);
             newBars[b] = smoothHeight;
@@ -188,18 +159,14 @@ export class AudioMixer {
         }
       };
 
-      // Connect Mic Node -> Recorder Node -> Destination (silence output)
+      // 4. Connect Mic Node -> Recorder Node -> Destination
+      // Connecting to destination plays the overwritten output buffer (Scrcpy audio only)
       this.micSourceNode.connect(this.recorderNode);
-      // Connect to destination is necessary to trigger the onaudioprocess callback
-      // We can use a GainNode with 0 gain to prevent microphone audio looping back to speakers
-      const silenceGain = this.audioCtx.createGain();
-      silenceGain.gain.value = 0.0;
-      this.recorderNode.connect(silenceGain);
-      silenceGain.connect(this.audioCtx.destination);
+      this.recorderNode.connect(this.audioCtx.destination);
 
-      console.log('[AudioMixer] Audio mixing graph started successfully');
+      console.log('[AudioMixer] Unified audio mixing graph started successfully');
     } catch (err) {
-      console.error('[AudioMixer] Failed to start audio mixing graph:', err);
+      console.error('[AudioMixer] Failed to start unified audio mixing graph:', err);
       this.stop();
       throw err;
     }
@@ -302,7 +269,6 @@ export class AudioMixer {
       this.audioCtx = null;
     }
 
-    this.playedScrcpyQueue = [];
     this.onMixedAudioCallback = null;
     this.onMicWaveCallback = null;
   }
