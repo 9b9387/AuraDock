@@ -14,7 +14,9 @@
     "unmuteAudio": "Unmute phone audio",
     "inputText": "Input Text",
     "inputTextPlaceholder": "Type text to send to device...",
-    "sendFailed": "Failed to send, please try again"
+    "sendFailed": "Failed to send, please try again",
+    "clearAll": "Clear All",
+    "backspace": "Backspace"
   },
   "titleBar": {
     "deviceInfo": "Device: {{model}}",

@@ -14,7 +14,9 @@
     "unmuteAudio": "开启手机音频输出",
     "inputText": "输入文本",
     "inputTextPlaceholder": "请输入要发送到手机的文本...",
-    "sendFailed": "发送失败，请重试"
+    "sendFailed": "发送失败，请重试",
+    "clearAll": "全部清除",
+    "backspace": "回退删除"
   },
   "titleBar": {
     "deviceInfo": "设备：{{model}}",
