@@ -33,6 +33,22 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     }
   }, [isPopoverOpen]);
 
+  React.useEffect(() => {
+    if (isPopoverOpen && activeSerial) {
+      const fetchFocusedText = async () => {
+        try {
+          const res = await (window as any).adb.executeTool(activeSerial, 'get_focused_text', {});
+          if (res && res.status === 'success' && res.text !== undefined) {
+            setTextValue(res.text);
+          }
+        } catch (err) {
+          console.error('[NavigationBar] Failed to fetch focused text:', err);
+        }
+      };
+      fetchFocusedText();
+    }
+  }, [isPopoverOpen, activeSerial]);
+
   if (!activeSerial) return null;
 
   const handleSendText = async (e: React.FormEvent) => {
@@ -108,56 +124,61 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
             side="top" 
             align="start" 
             sideOffset={12}
-            className="w-80 p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl flex flex-col gap-2.5"
+            className="w-80 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl flex flex-col gap-2"
           >
-            <form onSubmit={handleSendText} className="flex flex-col gap-2">
-              <div className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+            <form onSubmit={handleSendText} className="flex flex-col gap-1.5">
+              <div className="text-xs font-bold text-zinc-600 dark:text-zinc-300 px-0.5">
                 {t('nav.inputText')}
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  autoFocus
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                  placeholder={t('nav.inputTextPlaceholder')}
-                  className="flex-1 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-lg px-2.5 py-1.5 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
-                  disabled={isSending}
-                />
+              <div className="flex gap-2 items-center">
+                {/* Embedded input group */}
+                <div className="flex-1 flex items-center gap-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-emerald-500 rounded-lg px-2 py-1 transition-colors">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={textValue}
+                    onChange={(e) => setTextValue(e.target.value)}
+                    placeholder={t('nav.inputTextPlaceholder')}
+                    className="flex-1 text-xs bg-transparent border-none focus:outline-none text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 pr-1"
+                    disabled={isSending}
+                  />
+                  {textValue && (
+                    <button
+                      type="button"
+                      onClick={handleClearText}
+                      disabled={isSending}
+                      title={t('nav.clearAll')}
+                      className="p-1 rounded text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleBackspace}
+                    disabled={isSending}
+                    title={t('nav.backspace')}
+                    className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <Delete className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                
+                {/* Submit Send Button */}
                 <button
                   type="submit"
                   disabled={isSending || !textValue.trim()}
-                  className="flex items-center justify-center size-7 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-sm transition-colors cursor-pointer"
+                  className="flex items-center justify-center size-8 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-sm transition-colors cursor-pointer"
                 >
                   {isSending ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Send className="w-3.5 h-3.5" />
+                    <Send className="w-4 h-4" />
                   )}
                 </button>
               </div>
-              <div className="flex justify-between items-center mt-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
-                <button
-                  type="button"
-                  onClick={handleClearText}
-                  disabled={isSending}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {t('nav.clearAll')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBackspace}
-                  disabled={isSending}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <Delete className="w-3.5 h-3.5" />
-                  {t('nav.backspace')}
-                </button>
-              </div>
               {errorMsg && (
-                <div className="text-[10px] text-rose-500 dark:text-rose-400 font-medium">
+                <div className="text-[10px] text-rose-500 dark:text-rose-400 font-medium px-0.5">
                   {errorMsg}
                 </div>
               )}
