@@ -46,4 +46,9 @@ contextBridge.exposeInMainWorld("adb", {
   getMicrophoneStatus: () => ipcRenderer.invoke("permission:get-microphone-status"),
   requestMicrophone: () => ipcRenderer.invoke("permission:request-microphone"),
   openSystemSettings: () => ipcRenderer.invoke("permission:open-system-settings"),
+  db: {
+    getAllSessions: () => ipcRenderer.invoke("db:get-all-sessions"),
+    saveSession: (session: any) => ipcRenderer.invoke("db:save-session", session),
+    deleteSession: (id: string) => ipcRenderer.invoke("db:delete-session", id),
+  }
 });

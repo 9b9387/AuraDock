@@ -24,9 +24,19 @@ import { VideoFramePush } from './renderer/services/video-frame-push';
 import type { ConnectionStatus } from './renderer/services/gemini-live-service';
 import type { AdbDeviceInfo } from './types';
 import type { LogEntry } from './renderer/types';
+import { Tooltip } from './renderer/components/Tooltip';
+import { History, ChevronDown, Plus, Trash2 } from 'lucide-react';
+
+export interface SessionHistoryItem {
+  id: string;
+  title: string;
+  timestamp: number;
+  agentLogs: LogEntry[];
+  geminiLogs: LogEntry[];
+}
 
 export function App() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
@@ -127,6 +137,51 @@ export function App() {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
+  // Session History State (SQLite)
+  const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
+  const historyDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Load and initialize sessions from SQLite on mount
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        const loadedSessions = await (window as any).adb.db.getAllSessions();
+        if (loadedSessions && loadedSessions.length > 0) {
+          setSessions(loadedSessions);
+          
+          const storedActive = localStorage.getItem('omni_current_session_id');
+          const exists = loadedSessions.some((s: any) => s.id === storedActive);
+          const activeId = exists ? storedActive! : loadedSessions[0].id;
+          
+          setCurrentSessionId(activeId);
+          const activeSession = loadedSessions.find((s: any) => s.id === activeId);
+          if (activeSession) {
+            setAgentLogs(activeSession.agentLogs || []);
+            setGeminiLogs(activeSession.geminiLogs || []);
+          }
+        } else {
+          // Initialize a default session
+          const defaultId = 'session-' + Date.now();
+          const defaultSession: SessionHistoryItem = {
+            id: defaultId,
+            title: i18n.language === 'en' ? 'New Session' : '新对话',
+            timestamp: Date.now(),
+            agentLogs: [],
+            geminiLogs: []
+          };
+          setSessions([defaultSession]);
+          setCurrentSessionId(defaultId);
+          await (window as any).adb.db.saveSession(defaultSession);
+        }
+      } catch (err) {
+        console.error('Failed to load sessions from SQLite:', err);
+      }
+    };
+    initDb();
+  }, []);
+
   // Gemini Live Call State
   const [geminiStatus, setGeminiStatus] = useState<ConnectionStatus>('disconnected');
   const [geminiLogs, setGeminiLogs] = useState<LogEntry[]>([]);
@@ -215,6 +270,135 @@ export function App() {
 
   // Circular dependency resolver
   const startScrcpyRef = useRef<any>(null);
+
+  // 2. Load logs when active session ID changes
+  useEffect(() => {
+    if (!currentSessionId || sessions.length === 0) return;
+    const activeSes = sessions.find(s => s.id === currentSessionId);
+    if (activeSes) {
+      setAgentLogs(activeSes.agentLogs || []);
+      setGeminiLogs(activeSes.geminiLogs || []);
+    }
+  }, [currentSessionId]);
+
+  // 3. Monitor log state changes and automatically save to SQLite
+  useEffect(() => {
+    if (!currentSessionId || sessions.length === 0) return;
+
+    const saveTimeout = setTimeout(async () => {
+      setSessions(prevSessions => {
+        const idx = prevSessions.findIndex(s => s.id === currentSessionId);
+        if (idx === -1) return prevSessions;
+
+        const existing = prevSessions[idx];
+        if (existing.agentLogs === agentLogs && existing.geminiLogs === geminiLogs) {
+          return prevSessions;
+        }
+
+        let title = existing.title;
+        // If the title is default "新对话" or "New Session", try to update it dynamically
+        if (title === '新对话' || title === 'New Session') {
+          const firstTaskLog = agentLogs.find(l => l.message.startsWith('Agent started for task: '));
+          const firstUserSpeech = [...agentLogs, ...geminiLogs].find(l => l.message.startsWith('You:'));
+          if (firstTaskLog) {
+            title = firstTaskLog.message.replace('Agent started for task: ', '').trim();
+          } else if (firstUserSpeech) {
+            title = firstUserSpeech.message.replace(/^You:/, '').trim();
+          }
+          if (title.length > 20) {
+            title = title.substring(0, 20) + '...';
+          }
+        }
+
+        const updated = [...prevSessions];
+        updated[idx] = {
+          ...existing,
+          title,
+          agentLogs,
+          geminiLogs
+        };
+
+        // Async save to SQLite database
+        (window as any).adb.db.saveSession(updated[idx]).catch((err: any) => {
+          console.error('Failed to save session to SQLite:', err);
+        });
+
+        return updated;
+      });
+
+      if (currentSessionId) {
+        localStorage.setItem('omni_current_session_id', currentSessionId);
+      }
+    }, 500); // 500ms debounce to prevent high-frequency write operations
+
+    return () => clearTimeout(saveTimeout);
+  }, [agentLogs, geminiLogs, currentSessionId]);
+
+  // 4. Click outside to close history dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (historyDropdownRef.current && !historyDropdownRef.current.contains(event.target as Node)) {
+        setShowHistoryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // 5. Create new session callback
+  const handleNewSession = useCallback(async () => {
+    if (agentRunning || geminiStatus === 'connected' || geminiStatus === 'connecting') {
+      return; // Locked: do not allow new session while a task or voice call is active
+    }
+
+    console.log('[Renderer] Creating New ADK Session in SQLite...');
+    (window as any).adb.stopAgent();
+    agentRunningRef.current = false;
+    setAgentRunning(false);
+    geminiLiveService.disconnect();
+
+    const newId = 'session-' + Date.now();
+    const newSessionItem: SessionHistoryItem = {
+      id: newId,
+      title: i18n.language === 'en' ? 'New Session' : '新对话',
+      timestamp: Date.now(),
+      agentLogs: [],
+      geminiLogs: []
+    };
+
+    setSessions(prev => [newSessionItem, ...prev]);
+    setCurrentSessionId(newId);
+    setAgentLogs([]);
+    setGeminiLogs([]);
+    setAgentInput('');
+    setGeminiChatInput('');
+
+    await (window as any).adb.db.saveSession(newSessionItem);
+  }, [agentRunning, geminiStatus, i18n.language]);
+
+  // 6. Delete session callback
+  const handleDeleteSession = useCallback(async (idToDelete: string) => {
+    try {
+      await (window as any).adb.db.deleteSession(idToDelete);
+      
+      setSessions(prev => {
+        if (prev.length <= 1) return prev; // Preserve at least one session
+        const updated = prev.filter(s => s.id !== idToDelete);
+        
+        if (currentSessionId === idToDelete) {
+          const nextSession = updated[0];
+          if (nextSession) {
+            setCurrentSessionId(nextSession.id);
+          }
+        }
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to delete session from SQLite:', err);
+    }
+  }, [currentSessionId]);
 
   // Reconnection Attempt Function
   const attemptReconnection = useCallback((attempt: number, serial: string, modelName: string | null) => {
@@ -1148,9 +1332,88 @@ INSTRUCTION FOR TAKE-OVER:
             style={{ paddingBottom: '12px', boxSizing: 'border-box' } as React.CSSProperties}
           >
             {/* Workspace header */}
-            <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-900 pb-3 mb-4 shrink-0">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-900 pb-3 mb-4 shrink-0">
               <span className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作</span>
-              {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-auto"></span>}
+              
+              <div className="flex items-center gap-1.5 relative">
+                {/* 历史对话按钮 */}
+                <div className="relative" ref={historyDropdownRef}>
+                  <Tooltip content={t('logs.historySessions') || '历史对话'} position="bottom">
+                    <button
+                      onClick={() => setShowHistoryDropdown(!showHistoryDropdown)}
+                      disabled={agentRunning || geminiStatus === 'connected' || geminiStatus === 'connecting'}
+                      className="flex items-center justify-center p-1.5 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800"
+                    >
+                      <History className="w-4 h-4" />
+                      <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                    </button>
+                  </Tooltip>
+
+                  {/* 历史对话下拉列表 */}
+                  {showHistoryDropdown && (
+                    <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-50 py-1.5 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-100">
+                      <div className="px-3 py-1.5 text-xxs font-bold text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-900/60 mb-1">
+                        {t('logs.historyList') || '历史对话列表'}
+                      </div>
+                      {sessions.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                          {t('logs.noHistory') || '暂无历史对话'}
+                        </div>
+                      ) : (
+                        sessions.map((s) => {
+                          const isActive = s.id === currentSessionId;
+                          return (
+                            <div
+                              key={s.id}
+                              className={`group flex items-center justify-between px-3 py-2 text-xs cursor-pointer transition-colors ${
+                                isActive
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-medium'
+                                  : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                              }`}
+                              onClick={() => {
+                                setCurrentSessionId(s.id);
+                                setShowHistoryDropdown(false);
+                              }}
+                            >
+                              <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                <span className="truncate font-medium">{s.title}</span>
+                                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                                  {new Date(s.timestamp).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              {sessions.length > 1 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSession(s.id);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-rose-500 transition-all cursor-pointer"
+                                  title={t('logs.deleteSession') || '删除此会话'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 新建会话按钮 */}
+                <Tooltip content={t('logs.newSession') || '新建会话'} position="bottom">
+                  <button
+                    onClick={handleNewSession}
+                    disabled={agentRunning || geminiStatus === 'connected' || geminiStatus === 'connecting'}
+                    className="flex items-center justify-center p-1.5 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+                
+                {geminiStatus === 'connected' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5"></span>}
+              </div>
             </div>
 
             {/* 1. MIDDLE SECTION: Unified Chronological Log Feed */}

@@ -5,6 +5,7 @@ import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
 import { VisionAgent } from './main/vision-agent';
 import { ConfigManager } from './main/config-manager';
+import { DatabaseManager } from './main/database';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
 // Load .env manually
@@ -87,7 +88,45 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', () => {
+app.on('ready', async () => {
+  // Initialize Database
+  try {
+    await DatabaseManager.init();
+    console.log('[Main] SQLite Database initialized');
+  } catch (err) {
+    console.error('[Main] Failed to initialize SQLite Database:', err);
+  }
+
+  // Register Database IPC handlers
+  ipcMain.handle('db:get-all-sessions', async () => {
+    try {
+      return await DatabaseManager.getAllSessions();
+    } catch (err: any) {
+      console.error('[Main] IPC db:get-all-sessions error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:save-session', async (_event, session) => {
+    try {
+      await DatabaseManager.saveSession(session);
+      return { success: true };
+    } catch (err: any) {
+      console.error('[Main] IPC db:save-session error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('db:delete-session', async (_event, id) => {
+    try {
+      await DatabaseManager.deleteSession(id);
+      return { success: true };
+    } catch (err: any) {
+      console.error('[Main] IPC db:delete-session error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   // Setup Config handlers
   ConfigManager.setupHandlers();
 

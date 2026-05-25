@@ -72,7 +72,12 @@
   "logs": {
     "waitingForTask": "等待接收任务指令",
     "enterTaskDesc": "在下方输入框描述你的任务目标并运行",
-    "newContent": "有 {{count}} 条新内容"
+    "newContent": "有 {{count}} 条新内容",
+    "newSession": "新建会话",
+    "historySessions": "历史对话",
+    "historyList": "历史对话列表",
+    "noHistory": "暂无历史对话",
+    "deleteSession": "删除此会话"
   },
   "settings": {
     "title": "偏好设置 (PREFERENCES)",

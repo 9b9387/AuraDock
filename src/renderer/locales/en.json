@@ -72,7 +72,12 @@
   "logs": {
     "waitingForTask": "Waiting for tasks",
     "enterTaskDesc": "Describe your task goal below and click Run",
-    "newContent": "{{count}} new items"
+    "newContent": "{{count}} new items",
+    "newSession": "New Session",
+    "historySessions": "Session History",
+    "historyList": "Session History",
+    "noHistory": "No history sessions",
+    "deleteSession": "Delete Session"
   },
   "settings": {
     "title": "Preferences",
