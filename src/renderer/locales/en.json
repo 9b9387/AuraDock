@@ -13,7 +13,8 @@
     "muteAudio": "Mute phone audio",
     "unmuteAudio": "Unmute phone audio",
     "inputText": "Input Text",
-    "inputTextPlaceholder": "Type text to send to device..."
+    "inputTextPlaceholder": "Type text to send to device...",
+    "sendFailed": "Failed to send, please try again"
   },
   "titleBar": {
     "deviceInfo": "Device: {{model}}",
