@@ -1,7 +1,8 @@
 {
   "common": {
     "cancel": "Cancel",
-    "connecting": "Connecting..."
+    "connecting": "Connecting...",
+    "send": "Send"
   },
   "nav": {
     "back": "Back",
@@ -10,7 +11,9 @@
     "screenshot": "Screenshot",
     "disconnect": "Disconnect",
     "muteAudio": "Mute phone audio",
-    "unmuteAudio": "Unmute phone audio"
+    "unmuteAudio": "Unmute phone audio",
+    "inputText": "Input Text",
+    "inputTextPlaceholder": "Type text to send to device..."
   },
   "titleBar": {
     "deviceInfo": "Device: {{model}}",

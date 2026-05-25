@@ -1,7 +1,8 @@
 {
   "common": {
     "cancel": "取消",
-    "connecting": "连接中..."
+    "connecting": "连接中...",
+    "send": "发送"
   },
   "nav": {
     "back": "返回",
@@ -10,7 +11,9 @@
     "screenshot": "屏幕截图",
     "disconnect": "断开手机连接",
     "muteAudio": "关闭手机音频输出",
-    "unmuteAudio": "开启手机音频输出"
+    "unmuteAudio": "开启手机音频输出",
+    "inputText": "输入文本",
+    "inputTextPlaceholder": "请输入要发送到手机的文本..."
   },
   "titleBar": {
     "deviceInfo": "设备：{{model}}",
