@@ -1,6 +1,7 @@
 import './renderer/i18n';
 import './index.css';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createRoot } from 'react-dom/client';
 
 import { TitleBar } from './renderer/components/TitleBar';
@@ -25,6 +26,8 @@ import type { AdbDeviceInfo } from './types';
 import type { LogEntry } from './renderer/types';
 
 export function App() {
+  const { i18n } = useTranslation();
+
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light' | 'system') || 'system';
@@ -64,6 +67,9 @@ export function App() {
         if (res) {
           setTheme(res.theme);
           geminiLiveService.setModel(res.geminiLiveModel);
+          if (res.language) {
+            i18n.changeLanguage(res.language);
+          }
         }
       } catch (e) {
         console.error('[Renderer] Error loading settings:', e);
@@ -1155,6 +1161,9 @@ INSTRUCTION FOR TAKE-OVER:
           onSettingsSaved={(newSettings) => {
             setTheme(newSettings.theme);
             geminiLiveService.setModel(newSettings.geminiLiveModel);
+            if (newSettings.language) {
+              i18n.changeLanguage(newSettings.language);
+            }
           }}
         />
       )}

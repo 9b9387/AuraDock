@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, X, Key, Eye, EyeOff, Languages, Shield, Save } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -10,11 +11,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onSettingsSaved,
 }) => {
+  const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState<any>(null);
   const [localSettings, setLocalSettings] = useState<any>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [micPermissionStatus, setMicPermissionStatus] = useState<'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'>('unknown');
+
+  const handleCancel = () => {
+    if (settings && settings.language) {
+      i18n.changeLanguage(settings.language);
+    }
+    onClose();
+  };
 
   // Load configuration from Electron on mount
   useEffect(() => {
@@ -112,10 +121,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-2">
             <Settings className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-500 animate-spin-slow" />
-            <h3 className="font-bold text-sm tracking-wide">偏好设置 (PREFERENCES)</h3>
+            <h3 className="font-bold text-sm tracking-wide">{t('settings.title')}</h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleCancel}
             className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -128,18 +137,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-4">
             <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
               <Key className="w-3.5 h-3.5" />
-              <span>API 与模型配置 (GEMINI API)</span>
+              <span>{t('settings.apiModelConfig')}</span>
             </h4>
             
             {/* Gemini API Key */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">Gemini 密钥</label>
+              <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.geminiApiKey')}</label>
               <div className="relative flex items-center">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={localSettings.geminiApiKey || ''}
                   onChange={(e) => setLocalSettings({ ...localSettings, geminiApiKey: e.target.value })}
-                  placeholder="输入您的 Gemini API 密钥..."
+                  placeholder={t('settings.geminiApiKeyPlaceholder')}
                   className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 pr-10 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100"
                 />
                 <button
@@ -151,29 +160,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                * 秘钥保存在本地安全的 UserData 路径，仅用于调用官方 Gemini Live 与 ADK Agent 服务。
+                {t('settings.geminiApiKeyTip')}
               </p>
             </div>
 
             {/* HTTP Proxy Configuration */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">HTTP 代理配置 (选填)</label>
+              <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.proxyConfig')}</label>
               <input
                 type="text"
                 value={localSettings.proxy || ''}
                 onChange={(e) => setLocalSettings({ ...localSettings, proxy: e.target.value })}
-                placeholder="http://127.0.0.1:7890 (不填则默认使用系统/环境变量代理)"
+                placeholder={t('settings.proxyPlaceholder')}
                 className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
               />
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                * 在中国大陆地区，设置本地代理服务器可确保稳定连接 Google Gemini。修改代理后，建议重启应用完全生效。
+                {t('settings.proxyTip')}
               </p>
             </div>
 
             {/* Models Configuration */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">实时语音模型 (Live Call)</label>
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.liveCallModel')}</label>
                 <select
                   value={localSettings.geminiLiveModel || 'models/gemini-3.1-flash-live-preview'}
                   onChange={(e) => setLocalSettings({ ...localSettings, geminiLiveModel: e.target.value })}
@@ -183,7 +192,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">智能体模型 (Vision Agent)</label>
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.visionAgentModel')}</label>
                 <select
                   value={localSettings.visionAgentModel || 'gemini-3-flash-preview'}
                   onChange={(e) => setLocalSettings({ ...localSettings, visionAgentModel: e.target.value })}
@@ -201,33 +210,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-4">
             <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
               <Languages className="w-3.5 h-3.5" />
-              <span>常规与显示</span>
+              <span>{t('settings.appearanceLang')}</span>
             </h4>
 
             <div className="grid grid-cols-2 gap-4">
               {/* Theme */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">系统主题</label>
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.systemTheme')}</label>
                 <select
                   value={localSettings.theme || 'system'}
                   onChange={(e) => setLocalSettings({ ...localSettings, theme: e.target.value as any })}
                   className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
                 >
-                  <option value="light">浅色模式</option>
-                  <option value="dark">深色模式</option>
-                  <option value="system">系统默认</option>
+                  <option value="light">{t('settings.themeLight')}</option>
+                  <option value="dark">{t('settings.themeDark')}</option>
+                  <option value="system">{t('settings.themeSystem')}</option>
                 </select>
               </div>
               {/* Language */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">界面语言</label>
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{t('settings.interfaceLang')}</label>
                 <select
                   value={localSettings.language || 'zh'}
-                  onChange={(e) => setLocalSettings({ ...localSettings, language: e.target.value as any })}
+                  onChange={(e) => {
+                    const lang = e.target.value;
+                    setLocalSettings({ ...localSettings, language: lang as any });
+                    i18n.changeLanguage(lang);
+                  }}
                   className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors cursor-pointer text-zinc-800 dark:text-zinc-100"
                 >
-                  <option value="zh">简体中文</option>
-                  <option value="en">English (暂未支持)</option>
+                  <option value="zh">{t('settings.langZh')}</option>
+                  <option value="en">{t('settings.langEn')}</option>
                 </select>
               </div>
             </div>
@@ -237,22 +250,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-4">
             <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
               <Shield className="w-3.5 h-3.5" />
-              <span>系统安全与权限</span>
+              <span>{t('settings.securityPermissions')}</span>
             </h4>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 rounded-xl">
                 <div className="flex flex-col min-w-0 pr-3">
-                  <span className="text-xs font-bold">麦克风权限</span>
+                  <span className="text-xs font-bold">{t('settings.micPermission')}</span>
                   <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-relaxed">
-                    允许 App 访问系统麦克风。此权限为实时双向语音通话的必需权限。
+                    {t('settings.micPermissionDesc')}
                   </span>
                 </div>
 
                 <div className="shrink-0">
                   {micPermissionStatus === 'granted' && (
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                      已授权
+                      {t('settings.authorized')}
                     </span>
                   )}
 
@@ -261,7 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={handleRequestMicPermission}
                       className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
                     >
-                      请求授权
+                      {t('settings.requestAuth')}
                     </button>
                   )}
 
@@ -270,7 +283,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={handleOpenSystemSettings}
                       className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
                     >
-                      去授权
+                      {t('settings.goAuthorize')}
                     </button>
                   )}
                 </div>
@@ -282,10 +295,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 shrink-0">
           <button
-            onClick={onClose}
+            onClick={handleCancel}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
           >
-            取消
+            {t('settings.cancel')}
           </button>
           <button
             onClick={handleSaveSettings}
@@ -293,10 +306,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-md transition-colors cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
-            {saveStatus === 'saving' && '正在保存...'}
-            {saveStatus === 'saved' && '保存成功 ✓'}
-            {saveStatus === 'error' && '保存失败 ✗'}
-            {saveStatus === 'idle' && '保存设置'}
+            {saveStatus === 'saving' && t('settings.saving')}
+            {saveStatus === 'saved' && t('settings.saveSuccess')}
+            {saveStatus === 'error' && t('settings.saveError')}
+            {saveStatus === 'idle' && t('settings.save')}
           </button>
         </div>
       </div>
