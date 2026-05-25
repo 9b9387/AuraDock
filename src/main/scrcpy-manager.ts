@@ -415,7 +415,7 @@ export class ScrcpyManager {
           try {
             await execPromise(`adb -s ${serial} shell uiautomator dump ${dumpPath}`);
             const { stdout } = await execPromise(`adb -s ${serial} shell cat ${dumpPath}`);
-            execPromise(`adb -s ${serial} shell rm ${dumpPath}`).catch(() => {});
+            execPromise(`adb -s ${serial} shell rm ${dumpPath}`).catch((err) => console.warn('[ScrcpyManager] Temporary file cleanup failed:', err));
 
             const xml = stdout.toString();
             const nodeMatches = xml.match(/<node[^>]*focused=["']true["'][^>]*>/g);
