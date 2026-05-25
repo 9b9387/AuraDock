@@ -409,26 +409,30 @@ export class ScrcpyManager {
 
           console.log(`[ScrcpyManager] Getting focused text field content...`);
 
+          const uniqueId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          const dumpPath = `/data/local/tmp/uidump_${uniqueId}.xml`;
+
           try {
-            const dumpPath = '/data/local/tmp/uidump.xml';
             await execPromise(`adb -s ${serial} shell uiautomator dump ${dumpPath}`);
             const { stdout } = await execPromise(`adb -s ${serial} shell cat ${dumpPath}`);
             execPromise(`adb -s ${serial} shell rm ${dumpPath}`).catch(() => {});
 
             const xml = stdout.toString();
-            const nodeMatches = xml.match(/<node[^>]*focused="true"[^>]*>/g);
+            const nodeMatches = xml.match(/<node[^>]*focused=["']true["'][^>]*>/g);
             
             if (nodeMatches) {
               for (const node of nodeMatches) {
-                const textMatch = node.match(/text="([^"]*)"/);
+                const textMatch = node.match(/text=(["'])(.*?)\1/);
                 if (textMatch) {
-                  // Decode standard XML entities: &amp;, &lt;, &gt;, &quot;, &apos;
-                  const text = textMatch[1]
+                  // Decode standard XML entities & numeric entities
+                  const text = textMatch[2]
                     .replace(/&amp;/g, '&')
                     .replace(/&lt;/g, '<')
                     .replace(/&gt;/g, '>')
                     .replace(/&quot;/g, '"')
-                    .replace(/&apos;/g, "'");
+                    .replace(/&apos;/g, "'")
+                    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+                    .replace(/&#([0-9]+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
                   console.log(`[ScrcpyManager] Found focused text: "${text}"`);
                   return { status: 'success', text };
                 }
@@ -438,7 +442,7 @@ export class ScrcpyManager {
             return { status: 'success', text: '' };
           } catch (e: any) {
             console.error(`[ScrcpyManager] Get focused text failed:`, e);
-            return { status: 'success', text: '' };
+            return { status: 'error', error: e.message || String(e), text: '' };
           }
         }
 
