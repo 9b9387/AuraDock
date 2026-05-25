@@ -374,11 +374,32 @@ export class ScrcpyManager {
               service.sendControlMessage({ type: ControlMessageType.INJECT_KEYCODE, action: 0, keycode: 187, repeat: 0, metaState: 0 });
               service.sendControlMessage({ type: ControlMessageType.INJECT_KEYCODE, action: 1, keycode: 187, repeat: 0, metaState: 0 });
               break;
+            case 'DEL':
+              service.sendControlMessage({ type: ControlMessageType.INJECT_KEYCODE, action: 0, keycode: 67, repeat: 0, metaState: 0 });
+              service.sendControlMessage({ type: ControlMessageType.INJECT_KEYCODE, action: 1, keycode: 67, repeat: 0, metaState: 0 });
+              break;
             default:
               throw new Error(`Unsupported key event: ${key}`);
           }
 
           return { status: 'success', details: `Sent key event: ${key}` };
+        }
+
+        case 'clear_text': {
+          const { exec } = await import('node:child_process');
+          const { promisify } = await import('node:util');
+          const execPromise = promisify(exec);
+          const command = `adb -s ${serial} shell am broadcast -a ADB_CLEAR_TEXT`;
+
+          console.log(`[ScrcpyManager] Clear text tool executing...`);
+
+          try {
+            await execPromise(command);
+            return { status: 'success', details: 'Text cleared successfully' };
+          } catch (e: any) {
+            console.error(`[ScrcpyManager] Clear text failed:`, e);
+            throw new Error(`ADBKeyBoard clear text failed: ${e.message}`);
+          }
         }
 
         default:
