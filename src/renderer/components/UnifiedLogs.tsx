@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, Cpu, Brain, Info, Terminal, ArrowDown } from 'lucide-react';
 import type { LogEntry } from '../types';
 
@@ -9,6 +10,7 @@ interface UnifiedLogsProps {
 export const UnifiedLogs: React.FC<UnifiedLogsProps> = ({
   unifiedLogs,
 }) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -85,8 +87,8 @@ export const UnifiedLogs: React.FC<UnifiedLogsProps> = ({
         {unifiedLogs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6">
             <Bot className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-3" />
-            <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400">等待接收任务指令</p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1">在下方输入框描述你的任务目标并运行</p>
+            <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400">{t('logs.waitingForTask')}</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1">{t('logs.enterTaskDesc')}</p>
           </div>
         ) : (
           unifiedLogs.map((log, index) => {
@@ -162,7 +164,7 @@ export const UnifiedLogs: React.FC<UnifiedLogsProps> = ({
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/90 dark:bg-zinc-100/95 hover:bg-zinc-800 dark:hover:bg-zinc-50 text-white dark:text-zinc-950 text-xxs font-semibold rounded-full shadow-lg border border-zinc-800 dark:border-zinc-200 backdrop-blur transition-all duration-300 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-3 cursor-pointer z-10"
         >
           <ArrowDown className="w-3.5 h-3.5 animate-bounce" />
-          <span>有 {unreadCount} 条新内容</span>
+          <span>{t('logs.newContent', { count: unreadCount })}</span>
         </button>
       )}
     </div>

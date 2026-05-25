@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Send, Square, PhoneOff, Loader2, MicOff, Play, Power, HelpCircle, Sparkles, X } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
 
@@ -15,17 +16,18 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
   waveBars, 
   handleStopLiveCall 
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2.5 px-3 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 rounded-xl h-10 shadow-lg dark:shadow-none shrink-0">
       {geminiStatus === 'connecting' ? (
         <>
           <Loader2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
-          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">连接中...</span>
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{t('controlPanel.connecting')}</span>
         </>
       ) : textOnlyMode ? (
         <>
           <MicOff className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">已静音</span>
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{t('controlPanel.muted')}</span>
         </>
       ) : (
         <>
@@ -45,7 +47,7 @@ const VoiceCapsule: React.FC<VoiceCapsuleProps> = ({
       <button 
         onClick={handleStopLiveCall} 
         className="text-rose-600 dark:text-rose-400 hover:text-rose-500 transition-colors cursor-pointer"
-        title="挂断通话"
+        title={t('controlPanel.hangUp')}
       >
         <X className="w-4 h-4" />
       </button>
@@ -86,6 +88,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   handleStopLiveCall,
   textOnlyMode,
 }) => {
+  const { t } = useTranslation();
   const isConnected = geminiStatus === 'connected';
   const isConnecting = geminiStatus === 'connecting';
   const isCallActive = isConnected || isConnecting;
@@ -93,10 +96,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const inputValue = isCallActive ? geminiChatInput : agentInput;
   const setInputValue = isCallActive ? setGeminiChatInput : setAgentInput;
   const placeholderText = isConnecting
-    ? "正在建立连接，请稍候..."
+    ? t('controlPanel.establishingConnection')
     : isConnected
-      ? "发送文本指令给实时语音助手..."
-      : "给 Agent 发送指令...";
+      ? t('controlPanel.sendVoiceAssistantPlaceholder')
+      : t('controlPanel.sendAgentPlaceholder');
 
   const handleSend = () => {
     if (isCallActive) {
@@ -160,7 +163,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </button>
               {/* Tooltip */}
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 dark:text-zinc-200 text-xxs font-semibold rounded-lg shadow-xl border border-zinc-200/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 scale-95 group-hover:scale-100">
-                开启 Gemini 语音通话
+                {t('controlPanel.startVoiceCall')}
               </div>
             </div>
           )}
@@ -183,7 +186,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             </button>
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 dark:text-zinc-200 text-xxs font-semibold rounded-lg shadow-xl border border-zinc-200/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 scale-95 group-hover:scale-100">
-              {isStopButton ? "停止当前运行的 Agent" : (isCallActive ? "发送文本给语音助手" : "运行 Agent 任务指令 (Enter)")}
+              {isStopButton ? t('controlPanel.stopAgent') : (isCallActive ? t('controlPanel.sendTextToAssistant') : t('controlPanel.runAgentTask'))}
             </div>
           </div>
         </div>
