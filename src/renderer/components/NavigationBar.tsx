@@ -27,6 +27,12 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   const [isSending, setIsSending] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState('');
 
+  React.useEffect(() => {
+    if (!isPopoverOpen) {
+      setErrorMsg('');
+    }
+  }, [isPopoverOpen]);
+
   if (!activeSerial) return null;
 
   const handleSendText = async (e: React.FormEvent) => {
