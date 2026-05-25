@@ -34,19 +34,27 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   }, [isPopoverOpen]);
 
   React.useEffect(() => {
+    let active = true;
     if (isPopoverOpen && activeSerial) {
       const fetchFocusedText = async () => {
         try {
           const res = await (window as any).adb.executeTool(activeSerial, 'get_focused_text', {});
-          if (res && res.status === 'success' && res.text !== undefined) {
-            setTextValue(res.text);
+          if (active) {
+            if (res && res.status === 'success' && res.text !== undefined) {
+              setTextValue(res.text);
+            }
           }
         } catch (err) {
-          console.error('[NavigationBar] Failed to fetch focused text:', err);
+          if (active) {
+            console.error('[NavigationBar] Failed to fetch focused text:', err);
+          }
         }
       };
       fetchFocusedText();
     }
+    return () => {
+      active = false;
+    };
   }, [isPopoverOpen, activeSerial]);
 
   if (!activeSerial) return null;
@@ -70,6 +78,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   };
 
   const handleClearText = async () => {
+    if (isSending) return;
+    setIsSending(true);
     setErrorMsg('');
     try {
       await (window as any).adb.executeTool(activeSerial, 'clear_text', {});
@@ -77,10 +87,14 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     } catch (err: any) {
       console.error('[NavigationBar] Failed to clear text:', err);
       setErrorMsg(err.message || t('nav.sendFailed'));
+    } finally {
+      setIsSending(false);
     }
   };
 
   const handleBackspace = async () => {
+    if (isSending) return;
+    setIsSending(true);
     setErrorMsg('');
     try {
       await (window as any).adb.executeTool(activeSerial, 'key_event', { key: 'DEL' });
@@ -88,6 +102,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     } catch (err: any) {
       console.error('[NavigationBar] Failed to backspace:', err);
       setErrorMsg(err.message || t('nav.sendFailed'));
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -148,6 +164,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                       onClick={handleClearText}
                       disabled={isSending}
                       title={t('nav.clearAll')}
+                      aria-label={t('nav.clearAll')}
                       className="p-1 rounded text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -158,6 +175,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                     onClick={handleBackspace}
                     disabled={isSending}
                     title={t('nav.backspace')}
+                    aria-label={t('nav.backspace')}
                     className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     <Delete className="w-3.5 h-3.5" />
