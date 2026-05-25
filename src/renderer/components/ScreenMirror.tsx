@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface ScreenMirrorProps {
@@ -26,6 +27,8 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
   onManualReconnect,
   onCancelReconnect,
 }) => {
+  const { t } = useTranslation();
+
   const isConnecting = scrcpyStatus.toLowerCase().includes('connect') && 
                        !scrcpyStatus.toLowerCase().includes('fail') && 
                        !reconnecting && 
@@ -37,7 +40,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
         <div className="absolute top-4 left-4 right-4 p-3 bg-red-950/80 border border-red-500/30 rounded-xl flex items-start gap-2.5 text-sm text-red-200 z-20 animate-bounce">
           <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-red-400">连接错误</p>
+            <p className="font-semibold text-red-400">{t('screenMirror.connectionError')}</p>
             <p className="text-xs opacity-90 mt-0.5 break-all">{scrcpyError}</p>
           </div>
         </div>
@@ -51,7 +54,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
             <Loader2 className="w-8 h-8 text-emerald-600 dark:text-emerald-500 animate-spin relative z-10" />
           </div>
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
-            正在连接中...
+            {t('screenMirror.connecting')}
           </h4>
         </div>
       )}
@@ -64,7 +67,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
             <Loader2 className="w-8 h-8 text-emerald-600 dark:text-emerald-500 animate-spin relative z-10" />
           </div>
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
-            自动重连中 {reconnectAttempt} / 3次...
+            {t('screenMirror.reconnecting', { attempt: reconnectAttempt })}
           </h4>
         </div>
       )}
@@ -77,20 +80,20 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
             <AlertCircle className="w-8 h-8 text-red-500 dark:text-red-400 relative z-10" />
           </div>
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
-            与设备失去连接，请检查设备连接状态
+            {t('screenMirror.disconnectedTip')}
           </h4>
           <div className="flex items-center gap-3 mt-4">
             <button
               onClick={onCancelReconnect}
               className="px-4 py-1.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-[10px] font-bold rounded-full shadow-sm hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
             >
-              返回
+              {t('screenMirror.back')}
             </button>
             <button
               onClick={onManualReconnect}
               className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-zinc-950 text-[10px] font-bold rounded-full shadow-sm hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
             >
-              重新连接
+              {t('screenMirror.reconnect')}
             </button>
           </div>
         </div>
