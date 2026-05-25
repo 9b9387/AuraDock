@@ -376,6 +376,31 @@ export function App() {
     return () => clearInterval(interval);
   }, [refreshDevices]);
 
+  // Register global keydown listener to capture Backspace and forward it to scrcpy
+  useEffect(() => {
+    if (!activeSerial) return;
+
+    const handleGlobalKeyDown = async (e: KeyboardEvent) => {
+      // Only intercept if the target is NOT an input, textarea, or editable element
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      if (e.key === 'Backspace' && !isInput) {
+        e.preventDefault();
+        try {
+          await (window as any).adb.executeTool(activeSerial, 'key_event', { key: 'DEL' });
+        } catch (err) {
+          console.error('[Global KeyDown] Failed to send backspace:', err);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [activeSerial]);
+
   // Activate the port listener on mount so the preload script forwards scrcpy-port via postMessage
   useEffect(() => {
     const unsubscribe = (window as any).adb.onScrcpyPort(() => {
