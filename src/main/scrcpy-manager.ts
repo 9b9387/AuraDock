@@ -402,6 +402,46 @@ export class ScrcpyManager {
           }
         }
 
+        case 'get_focused_text': {
+          const { exec } = await import('node:child_process');
+          const { promisify } = await import('node:util');
+          const execPromise = promisify(exec);
+
+          console.log(`[ScrcpyManager] Getting focused text field content...`);
+
+          try {
+            const dumpPath = '/data/local/tmp/uidump.xml';
+            await execPromise(`adb -s ${serial} shell uiautomator dump ${dumpPath}`);
+            const { stdout } = await execPromise(`adb -s ${serial} shell cat ${dumpPath}`);
+            execPromise(`adb -s ${serial} shell rm ${dumpPath}`).catch(() => {});
+
+            const xml = stdout.toString();
+            const nodeMatches = xml.match(/<node[^>]*focused="true"[^>]*>/g);
+            
+            if (nodeMatches) {
+              for (const node of nodeMatches) {
+                const textMatch = node.match(/text="([^"]*)"/);
+                if (textMatch) {
+                  // Decode standard XML entities: &amp;, &lt;, &gt;, &quot;, &apos;
+                  const text = textMatch[1]
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&apos;/g, "'");
+                  console.log(`[ScrcpyManager] Found focused text: "${text}"`);
+                  return { status: 'success', text };
+                }
+              }
+            }
+
+            return { status: 'success', text: '' };
+          } catch (e: any) {
+            console.error(`[ScrcpyManager] Get focused text failed:`, e);
+            return { status: 'success', text: '' };
+          }
+        }
+
         default:
           throw new Error(`Unsupported tool name: ${name}`);
       }
