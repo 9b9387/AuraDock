@@ -69,6 +69,14 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
           <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
             {t('screenMirror.reconnecting', { attempt: reconnectAttempt })}
           </h4>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={onCancelReconnect}
+              className="px-4 py-1.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-[10px] font-bold rounded-full shadow-sm hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              {t('screenMirror.cancel')}
+            </button>
+          </div>
         </div>
       )}
 

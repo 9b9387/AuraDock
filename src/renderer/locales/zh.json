@@ -43,6 +43,7 @@
     "reconnecting": "自动重连中 {{attempt}} / 3次...",
     "disconnectedTip": "与设备失去连接，请检查设备连接状态",
     "back": "返回",
+    "cancel": "取消",
     "reconnect": "重新连接"
   },
   "controlPanel": {

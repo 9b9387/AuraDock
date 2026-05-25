@@ -43,6 +43,7 @@
     "reconnecting": "Reconnecting {{attempt}} / 3...",
     "disconnectedTip": "Disconnected. Please check device status.",
     "back": "Back",
+    "cancel": "Cancel",
     "reconnect": "Reconnect"
   },
   "controlPanel": {
