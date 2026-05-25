@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Triangle, Circle, Square, Camera, Link2Off, Volume2, VolumeX, Keyboard, Send, Loader2 } from 'lucide-react';
+import { Triangle, Circle, Square, Camera, Link2Off, Volume2, VolumeX, Keyboard, Send, Loader2, Trash2, Delete } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 
@@ -50,6 +50,26 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       setErrorMsg(err.message || t('nav.sendFailed'));
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleClearText = async () => {
+    try {
+      await (window as any).adb.executeTool(activeSerial, 'clear_text', {});
+      setTextValue('');
+    } catch (err: any) {
+      console.error('[NavigationBar] Failed to clear text:', err);
+      setErrorMsg(err.message || t('nav.sendFailed'));
+    }
+  };
+
+  const handleBackspace = async () => {
+    try {
+      await (window as any).adb.executeTool(activeSerial, 'key_event', { key: 'DEL' });
+      setTextValue(prev => prev.slice(0, -1));
+    } catch (err: any) {
+      console.error('[NavigationBar] Failed to backspace:', err);
+      setErrorMsg(err.message || t('nav.sendFailed'));
     }
   };
 
@@ -112,6 +132,24 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                   ) : (
                     <Send className="w-3.5 h-3.5" />
                   )}
+                </button>
+              </div>
+              <div className="flex justify-between items-center mt-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
+                <button
+                  type="button"
+                  onClick={handleClearText}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {t('nav.clearAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackspace}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Delete className="w-3.5 h-3.5" />
+                  {t('nav.backspace')}
                 </button>
               </div>
               {errorMsg && (
