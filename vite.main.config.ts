@@ -16,6 +16,7 @@ export default defineConfig({
         '@google/genai',
         'undici',
         'fsevents',
+        'sqlite3',
       ],
     },
   },

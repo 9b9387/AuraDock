@@ -20,7 +20,7 @@ const config: ForgeConfig = {
     },
   },
   rebuildConfig: {
-    onlyModules: [],
+    onlyModules: ['sqlite3'],
   },
   hooks: {
     packageAfterCopy: async (config, buildPath, electronVersion, platform, arch) => {
