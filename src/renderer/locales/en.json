@@ -1,0 +1,100 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "connecting": "Connecting..."
+  },
+  "nav": {
+    "back": "Back",
+    "home": "Home",
+    "recentApps": "Recents",
+    "screenshot": "Screenshot",
+    "disconnect": "Disconnect"
+  },
+  "titleBar": {
+    "deviceInfo": "Device: {{model}}",
+    "streaming": "Streaming",
+    "connecting": "Connecting",
+    "hideWorkspace": "Hide Workspace",
+    "showWorkspace": "Show Workspace",
+    "preferences": "Preferences"
+  },
+  "deviceSelector": {
+    "androidConnection": "Android Connection",
+    "selectDeviceTip": "Select a device to start collaboration",
+    "availableDevices": "Available Devices ({{count}})",
+    "refreshList": "Refresh Devices",
+    "noDevicesFound": "No devices found",
+    "step1": "1. Enable \"USB Debugging\" on your phone.",
+    "step2": "2. Connect your phone via USB cable.",
+    "unknownAndroidDevice": "Unknown Android Device",
+    "connect": "Connect"
+  },
+  "screenMirror": {
+    "connectionError": "Connection Error",
+    "connecting": "Connecting...",
+    "reconnecting": "Reconnecting {{attempt}} / 3...",
+    "disconnectedTip": "Disconnected. Please check device status.",
+    "back": "Back",
+    "reconnect": "Reconnect"
+  },
+  "controlPanel": {
+    "connecting": "Connecting...",
+    "muted": "Muted",
+    "hangUp": "Hang Up",
+    "establishingConnection": "Establishing connection, please wait...",
+    "sendVoiceAssistantPlaceholder": "Send text command to voice assistant...",
+    "sendAgentPlaceholder": "Send command to Agent...",
+    "startVoiceCall": "Start Gemini Voice Call",
+    "stopAgent": "Stop Current Agent",
+    "sendTextToAssistant": "Send text to assistant",
+    "runAgentTask": "Run Agent Task (Enter)"
+  },
+  "micCheck": {
+    "noMicTitle": "No Microphone Detected",
+    "noMicDesc": "No available microphone was found. Please check your connection or switch to text mode.",
+    "textDialogue": "Chat via Text",
+    "permissionDeniedTitle": "Microphone Permission Denied",
+    "permissionDeniedDesc": "Microphone is detected but cannot be recorded. It might be in use by another program, or there is a driver issue.",
+    "openSystemSettings": "Open Settings",
+    "textDialogueFirst": "Chat via Text First",
+    "micUnavailableTitle": "Microphone Unavailable",
+    "micUnavailableDesc": "Microphone is detected but cannot be recorded. It might be in use by another program, or there is a driver issue.",
+    "cancel": "Cancel"
+  },
+  "logs": {
+    "waitingForTask": "Waiting for tasks",
+    "enterTaskDesc": "Describe your task goal below and click Run",
+    "newContent": "{{count}} new items"
+  },
+  "settings": {
+    "title": "Preferences",
+    "apiModelConfig": "API & Model Config (GEMINI API)",
+    "geminiApiKey": "Gemini API Key",
+    "geminiApiKeyPlaceholder": "Enter your Gemini API key...",
+    "geminiApiKeyTip": "* Stored securely in local UserData, used only for Gemini Live and ADK Agent services.",
+    "proxyConfig": "HTTP Proxy (Optional)",
+    "proxyPlaceholder": "http://127.0.0.1:7890 (leave empty to use system/env proxy)",
+    "proxyTip": "* Setting a local proxy ensures stable connections to Gemini. Restarts may be required to fully apply.",
+    "liveCallModel": "Live Call Model",
+    "visionAgentModel": "Vision Agent Model",
+    "appearanceLang": "Appearance & Language",
+    "systemTheme": "System Theme",
+    "themeLight": "Light Mode",
+    "themeDark": "Dark Mode",
+    "themeSystem": "System Default",
+    "interfaceLang": "Interface Language",
+    "langZh": "简体中文",
+    "langEn": "English",
+    "securityPermissions": "Security & Permissions",
+    "micPermission": "Microphone Permission",
+    "micPermissionDesc": "Allow the app to access the microphone. Required for real-time voice calls.",
+    "authorized": "Authorized",
+    "requestAuth": "Authorize",
+    "goAuthorize": "Authorize",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "saveSuccess": "Saved ✓",
+    "saveError": "Failed ✗",
+    "save": "Save Settings"
+  }
+}

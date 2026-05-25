@@ -1,3 +1,4 @@
+import './renderer/i18n';
 import './index.css';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
