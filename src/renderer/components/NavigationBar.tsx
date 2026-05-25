@@ -54,6 +54,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   };
 
   const handleClearText = async () => {
+    setErrorMsg('');
     try {
       await (window as any).adb.executeTool(activeSerial, 'clear_text', {});
       setTextValue('');
@@ -64,6 +65,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   };
 
   const handleBackspace = async () => {
+    setErrorMsg('');
     try {
       await (window as any).adb.executeTool(activeSerial, 'key_event', { key: 'DEL' });
       setTextValue(prev => prev.slice(0, -1));
@@ -138,7 +140,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                 <button
                   type="button"
                   onClick={handleClearText}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer"
+                  disabled={isSending}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   {t('nav.clearAll')}
@@ -146,7 +149,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                 <button
                   type="button"
                   onClick={handleBackspace}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+                  disabled={isSending}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <Delete className="w-3.5 h-3.5" />
                   {t('nav.backspace')}
