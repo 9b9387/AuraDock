@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Triangle, Circle, Square, Camera, Link2Off, Volume2, VolumeX, Keyboard, Send, Loader2, Trash2 } from 'lucide-react';
+import { Triangle, Circle, Square, Camera, Link2Off, Volume2, VolumeX, Keyboard, Send, Loader2 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 
@@ -77,21 +77,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     }
   };
 
-  const handleClearText = async () => {
-    if (isSending) return;
-    setIsSending(true);
-    setErrorMsg('');
-    try {
-      await (window as any).adb.executeTool(activeSerial, 'clear_text', {});
-      setTextValue('');
-    } catch (err: any) {
-      console.error('[NavigationBar] Failed to clear text:', err);
-      setErrorMsg(err.message || t('nav.sendFailed'));
-    } finally {
-      setIsSending(false);
-    }
-  };
-
   return (
     <div className="mt-4 flex items-center justify-between px-4 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 z-10 shrink-0 transition-colors duration-200">
       {/* Left Slot: Audio output & keyboard text input */}
@@ -143,18 +128,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                     className="flex-1 text-xs bg-transparent border-none focus:outline-none text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 pr-1"
                     disabled={isSending}
                   />
-                  {textValue && (
-                    <button
-                      type="button"
-                      onClick={handleClearText}
-                      disabled={isSending}
-                      title={t('nav.clearAll')}
-                      aria-label={t('nav.clearAll')}
-                      className="p-1 rounded text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
                 </div>
                 
                 {/* Submit Send Button */}
