@@ -66,6 +66,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     setIsSending(true);
     setErrorMsg('');
     try {
+      // First clear the existing device text to prevent appending/double-typing, ensuring replacement behavior
+      await (window as any).adb.executeTool(activeSerial, 'clear_text', {});
       await (window as any).adb.executeTool(activeSerial, 'input_text', { text: textValue });
       setTextValue('');
       setIsPopoverOpen(false);
@@ -154,6 +156,12 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                     autoFocus
                     value={textValue}
                     onChange={(e) => setTextValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace') {
+                        e.preventDefault();
+                        handleBackspace();
+                      }
+                    }}
                     placeholder={t('nav.inputTextPlaceholder')}
                     className="flex-1 text-xs bg-transparent border-none focus:outline-none text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 pr-1"
                     disabled={isSending}
