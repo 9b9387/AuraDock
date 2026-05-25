@@ -8,7 +8,9 @@
     "home": "主页",
     "recentApps": "最近应用",
     "screenshot": "屏幕截图",
-    "disconnect": "断开手机连接"
+    "disconnect": "断开手机连接",
+    "muteAudio": "关闭手机音频输出",
+    "unmuteAudio": "开启手机音频输出"
   },
   "titleBar": {
     "deviceInfo": "设备：{{model}}",

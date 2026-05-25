@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, MessageSquare, Settings } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -21,6 +22,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   setShowSettings,
   isMac,
 }) => {
+  const { t } = useTranslation();
   return (
     <div 
       className="flex items-center justify-between h-9 px-4 border-b bg-zinc-50 border-zinc-200 dark:bg-zinc-950 dark:border-zinc-900 shrink-0 select-none"
@@ -35,13 +37,13 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         {activeSerial && (
           <div className="text-xs font-bold text-zinc-600 dark:text-zinc-400 tracking-wide flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>设备：{activeDeviceModel}</span>
+            <span>{t('titleBar.deviceInfo', { model: activeDeviceModel || t('deviceSelector.unknownAndroidDevice') })}</span>
             <span className="text-zinc-300 dark:text-zinc-700">|</span>
             <span className="text-emerald-600 dark:text-emerald-400">
               {scrcpyStatus.toLowerCase().includes('stream') 
-                ? '推流中' 
+                ? t('titleBar.streaming') 
                 : scrcpyStatus.toLowerCase().includes('connect') 
-                ? '连接中' 
+                ? t('titleBar.connecting') 
                 : scrcpyStatus}
             </span>
           </div>
@@ -52,7 +54,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         className={`flex items-center gap-1.5 ${!isMac ? 'pr-[140px]' : ''}`}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Tooltip content={showWorkspace ? "隐藏智能协作空间" : "显示智能协作空间"} position="bottom">
+        <Tooltip content={showWorkspace ? t('titleBar.hideWorkspace') : t('titleBar.showWorkspace')} position="bottom">
           <button
             onClick={() => setShowWorkspace(!showWorkspace)}
             className={`flex items-center justify-center p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer ${
@@ -65,7 +67,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           </button>
         </Tooltip>
 
-        <Tooltip content="偏好设置" position="bottom">
+        <Tooltip content={t('titleBar.preferences')} position="bottom">
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center justify-center p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all active:scale-95 cursor-pointer"

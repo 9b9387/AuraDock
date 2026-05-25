@@ -8,7 +8,9 @@
     "home": "Home",
     "recentApps": "Recents",
     "screenshot": "Screenshot",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "muteAudio": "Mute phone audio",
+    "unmuteAudio": "Unmute phone audio"
   },
   "titleBar": {
     "deviceInfo": "Device: {{model}}",
