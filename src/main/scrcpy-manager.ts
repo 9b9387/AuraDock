@@ -1,4 +1,4 @@
-import { ipcMain, MessageChannelMain } from 'electron';
+import { app, ipcMain, MessageChannelMain } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { ScrcpyStreamService, MediaKind, ControlMessageType } from '@9b9387/android-stream-scrcpy';
@@ -99,20 +99,38 @@ export class ScrcpyManager {
       console.warn(`[Scrcpy Manager] Failed to cleanup processes for ${serial}:`, e);
     }
 
-    // Explicitly point to the jar in node_modules, supporting ASAR packaged apps (using app.asar.unpacked)
-    let serverJarPath = path.join(__dirname, '../node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+    // Robust resolution for scrcpy-server jar using app.getAppPath() or fallback paths
+    let serverJarPath = '';
+    const jarRelativePath = 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar';
     
-    // Fallback if bundled differently
-    if (!fs.existsSync(serverJarPath)) {
-      serverJarPath = path.join(process.cwd(), 'node_modules/@9b9387/android-stream-scrcpy/assets/scrcpy-server-v4.0.jar');
+    const possiblePaths = [
+      path.join(app.getAppPath(), jarRelativePath),
+      path.join(process.cwd(), jarRelativePath),
+      path.join(__dirname, '..', jarRelativePath),
+      path.join(__dirname, '..', '..', jarRelativePath)
+    ];
+
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        serverJarPath = p;
+        break;
+      }
     }
-    
+
     // Resolve app.asar.unpacked path for native execution
-    if (serverJarPath.includes('app.asar')) {
+    if (serverJarPath && serverJarPath.includes('app.asar')) {
       const unpackedPath = serverJarPath.replace('app.asar', 'app.asar.unpacked');
       if (fs.existsSync(unpackedPath)) {
         serverJarPath = unpackedPath;
       }
+    }
+
+    // If still not found, default to process.cwd() fallback
+    if (!serverJarPath) {
+      serverJarPath = path.join(process.cwd(), jarRelativePath);
+      console.warn(`[Scrcpy Manager] scrcpy-server-v4.0.jar not found in standard paths. Defaulting to fallback: ${serverJarPath}`);
+    } else {
+      console.log(`[Scrcpy Manager] Successfully resolved scrcpy-server-v4.0.jar path: ${serverJarPath}`);
     }
 
     // Generate a stable scid

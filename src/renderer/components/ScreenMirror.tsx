@@ -111,7 +111,7 @@ export const ScreenMirror: React.FC<ScreenMirrorProps> = ({
         <canvas
           ref={canvasRef}
           onMouseDown={onCanvasMouseDown}
-          className="max-w-full max-h-[75vh] shadow-2xl rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-crosshair object-contain bg-black z-10"
+          className="max-w-full max-h-[75vh] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] dark:shadow-[0_30px_70px_-10px_rgba(0,0,0,0.85)] rounded-3xl border-2 border-zinc-200/80 dark:border-zinc-800/80 cursor-crosshair object-contain bg-black z-10"
         />
       </div>
     </>
