@@ -84,6 +84,7 @@ export class AgentLoop {
       let reasoningText = '';
       let toolCall: any = null;
       let finalAnswer = '';
+      let runnerError: { code?: string; message: string } | null = null;
 
       try {
         for await (const event of runner.runAsync({ 
@@ -93,6 +94,15 @@ export class AgentLoop {
           runConfig: { pauseOnToolCalls: true, maxLlmCalls: 1 }
         })) {
           if (!this.isRunning) break;
+
+          // Detect runner-level errors surfaced as events (e.g. network "fetch failed",
+          // API errors). These are NOT thrown as exceptions, so we must inspect each event.
+          const errCode = (event as any).errorCode;
+          const errMsg = (event as any).errorMessage;
+          if (errCode || errMsg) {
+            runnerError = { code: errCode, message: errMsg || String(errCode) };
+            break;
+          }
 
           // Accumulate reasoning/thought text as it streams
           const text = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
@@ -117,6 +127,15 @@ export class AgentLoop {
         this.context.log('status', `Error in Decision: ${e.message}`);
         await new Promise(r => setTimeout(r, 2000));
         continue;
+      }
+
+      if (runnerError) {
+        const isFetch = /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|network/i.test(runnerError.message);
+        const hint = isFetch
+          ? '（疑似网络/代理不可用，请到「设置 → HTTP 代理」配置可访问 Google Gemini 的代理后重启应用，或检查 API Key 是否正确。）'
+          : '';
+        this.context.log('status', `Agent halted: model request failed - ${runnerError.message}${hint}`);
+        break;
       }
 
       if (!this.isRunning) break;
@@ -170,6 +189,7 @@ export class AgentLoop {
 
           try {
             let obsText = '';
+            let obsError: { code?: string; message: string } | null = null;
             for await (const event of runner.runAsync({
               userId,
               sessionId,
@@ -177,11 +197,22 @@ export class AgentLoop {
               runConfig: { maxLlmCalls: 1, pauseOnToolCalls: true }
             })) {
               if (!this.isRunning) break;
+              const errCode = (event as any).errorCode;
+              const errMsg = (event as any).errorMessage;
+              if (errCode || errMsg) {
+                obsError = { code: errCode, message: errMsg || String(errCode) };
+                break;
+              }
               if (isFinalResponse(event)) {
                 obsText = event.content?.parts?.map((p: any) => p.text || '').join('') || '';
               }
             }
             if (!this.isRunning) break;
+            if (obsError) {
+              this.context.log('status', `Observation halted: ${obsError.message}`);
+              this.actionHistory.push(`Turn ${cycleCount}: ${toolName} -> (Observation request failed)`);
+              break;
+            }
             this.currentContext = obsText;
             if (obsText.trim()) {
               this.context.log('thought', `Observation: ${obsText.trim()}`);

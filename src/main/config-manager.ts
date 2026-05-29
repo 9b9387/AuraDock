@@ -10,6 +10,7 @@ export interface AppSettings {
   geminiLiveModel: string;
   visionAgentModel: string;
   proxy: string;
+  skillsPath: string;
   permissions: {
     camera: boolean;
     microphone: boolean;
@@ -25,6 +26,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   geminiLiveModel: 'models/gemini-3.1-flash-live-preview',
   visionAgentModel: 'gemini-3-flash-preview',
   proxy: '',
+  skillsPath: '',
   permissions: {
     camera: true,
     microphone: true,

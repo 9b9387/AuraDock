@@ -56,7 +56,11 @@
     "startVoiceCall": "开启 Gemini 语音通话",
     "stopAgent": "停止当前运行的 Agent",
     "sendTextToAssistant": "发送文本给语音助手",
-    "runAgentTask": "运行 Agent 任务指令 (Enter)"
+    "runAgentTask": "运行 Agent 任务指令 (Enter)",
+    "skillMenuTitle": "技能",
+    "skillEmpty": "请在设置中配置 Skills 路径",
+    "skillNoMatch": "未找到匹配的 skill",
+    "removeSkill": "移除 skill"
   },
   "micCheck": {
     "noMicTitle": "未检测到麦克风设备",
@@ -109,6 +113,11 @@
     "saving": "正在保存...",
     "saveSuccess": "保存成功 ✓",
     "saveError": "保存失败 ✗",
-    "save": "保存设置"
+    "save": "保存设置",
+    "skillsSection": "技能",
+    "skillsPath": "Skills 路径",
+    "skillsPathPlaceholder": "选择包含 SKILL.md 子目录的根目录",
+    "skillsPathTip": "* 指定 ADK Skills 根目录，每个子目录应包含 SKILL.md（遵循 ADK Agent Skill 规范）。在输入框中输入 / 即可选择技能。",
+    "browse": "浏览…"
   }
 }

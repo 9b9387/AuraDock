@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld("adb", {
     ipcRenderer.on("agent:status-change", listener);
     return () => ipcRenderer.removeListener("agent:status-change", listener);
   },
-  startAgent: (task: string) => ipcRenderer.send("agent:start", task),
+  startAgent: (payload: string | { task: string; skillName?: string | null }) =>
+    ipcRenderer.send("agent:start", payload),
   stopAgent: () => ipcRenderer.send("agent:stop"),
   pauseAgent: () => ipcRenderer.send("agent:pause"),
   resumeAgent: (newContext?: string) => ipcRenderer.send("agent:resume", newContext),
@@ -50,5 +51,9 @@ contextBridge.exposeInMainWorld("adb", {
     getAllSessions: () => ipcRenderer.invoke("db:get-all-sessions"),
     saveSession: (session: any) => ipcRenderer.invoke("db:save-session", session),
     deleteSession: (id: string) => ipcRenderer.invoke("db:delete-session", id),
-  }
+  },
+  skills: {
+    list: () => ipcRenderer.invoke("skills:list"),
+    pickFolder: () => ipcRenderer.invoke("skills:pick-folder"),
+  },
 });

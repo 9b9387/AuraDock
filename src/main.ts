@@ -5,6 +5,7 @@ import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
 import { VisionAgent } from './main/vision-agent';
 import { ConfigManager } from './main/config-manager';
+import { SkillManager } from './main/skill-manager';
 import { DatabaseManager } from './main/database';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
@@ -129,6 +130,9 @@ app.on('ready', async () => {
 
   // Setup Config handlers
   ConfigManager.setupHandlers();
+
+  // Setup Skill handlers
+  SkillManager.setupHandlers();
 
   // Load and apply initial settings (like theme)
   const initialSettings = ConfigManager.loadSettings();

@@ -1,7 +1,25 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Square, PhoneOff, Loader2, MicOff, Play, Power, HelpCircle, Sparkles, X } from 'lucide-react';
 import type { ConnectionStatus } from '../services/gemini-live-service';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from './ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from './ui/command';
+import { Badge } from './ui/badge';
+
+export interface SkillSummary {
+  name: string;
+  description: string;
+}
 
 interface VoiceCapsuleProps {
   geminiStatus: ConnectionStatus;
@@ -70,6 +88,11 @@ interface ControlPanelProps {
   handleStartLiveCall: () => void;
   handleStopLiveCall: () => void;
   textOnlyMode: boolean;
+  // Skill selection (only used in agent mode)
+  skills: SkillSummary[];
+  selectedSkill: SkillSummary | null;
+  setSelectedSkill: (s: SkillSummary | null) => void;
+  onLoadSkills?: () => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -87,6 +110,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   handleStartLiveCall,
   handleStopLiveCall,
   textOnlyMode,
+  skills,
+  selectedSkill,
+  setSelectedSkill,
+  onLoadSkills,
 }) => {
   const { t } = useTranslation();
   const isConnected = geminiStatus === 'connected';
@@ -125,24 +152,269 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
+  // ---------------- Skill slash menu ----------------
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
+  const [skillQuery, setSkillQuery] = useState('');
+  const [highlightIndex, setHighlightIndex] = useState(0);
+
+  // Skill menu only applicable in agent mode (no live call)
+  const skillMenuApplicable = !isCallActive && !selectedSkill;
+
+  // Get current "/token" at cursor position. Returns null if no active token.
+  const getSlashTokenAtCursor = (): { token: string; start: number; end: number } | null => {
+    const el = textareaRef.current;
+    if (!el) return null;
+    const value = el.value;
+    const cursor = el.selectionStart ?? value.length;
+    const before = value.slice(0, cursor);
+    const match = /(^|\s)(\/(\S*))$/.exec(before);
+    if (!match) return null;
+    const token = match[2];
+    const start = before.length - token.length;
+    return { token, start, end: cursor };
+  };
+
+  const updateSkillMenuFromInput = () => {
+    if (!skillMenuApplicable) {
+      if (skillMenuOpen) setSkillMenuOpen(false);
+      return;
+    }
+    const slash = getSlashTokenAtCursor();
+    if (slash) {
+      if (!skillMenuOpen) {
+        if (onLoadSkills) onLoadSkills();
+        setSkillMenuOpen(true);
+        setHighlightIndex(0);
+      }
+      setSkillQuery(slash.token.slice(1));
+    } else if (skillMenuOpen) {
+      setSkillMenuOpen(false);
+      setSkillQuery('');
+    }
+  };
+
+  // Close menu when switching to live mode or when selectedSkill set externally
+  useEffect(() => {
+    if (!skillMenuApplicable && skillMenuOpen) {
+      setSkillMenuOpen(false);
+      setSkillQuery('');
+    }
+  }, [skillMenuApplicable, skillMenuOpen]);
+
+  const filteredSkills = useMemo(() => {
+    const q = skillQuery.trim().toLowerCase();
+    if (!q) return skills;
+    return skills.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.description || '').toLowerCase().includes(q)
+    );
+  }, [skills, skillQuery]);
+
+  // Keep highlight in range as filteredSkills changes
+  useEffect(() => {
+    if (highlightIndex >= filteredSkills.length) {
+      setHighlightIndex(filteredSkills.length > 0 ? 0 : 0);
+    }
+  }, [filteredSkills.length, highlightIndex]);
+
+  // Reset highlight to top whenever the query (filter) changes
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [skillQuery]);
+
+  // Scroll the highlighted item into view on keyboard navigation
+  const highlightedName = filteredSkills[highlightIndex]?.name;
+  useEffect(() => {
+    if (!skillMenuOpen || !highlightedName) return;
+    const el = itemRefs.current.get(highlightedName);
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [highlightedName, skillMenuOpen]);
+
+  const pickSkill = (skill: SkillSummary) => {
+    const el = textareaRef.current;
+    if (el) {
+      const slash = getSlashTokenAtCursor();
+      if (slash) {
+        const value = el.value;
+        const next = value.slice(0, slash.start) + value.slice(slash.end);
+        setInputValue(next);
+        // Restore cursor at the slash start position after React re-render
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(slash.start, slash.start);
+          }
+        });
+      }
+    }
+    setSelectedSkill(skill);
+    setSkillMenuOpen(false);
+    setSkillQuery('');
+  };
+
   return (
     <div className="shrink-0">
       <div className="relative">
-        <textarea
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={placeholderText}
-          disabled={isConnecting || (!isCallActive && (agentRunning || !activeSerial))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              if (!isButtonDisabled) {
-                onButtonClick();
-              }
-            }
+        {/* Skill chip rendered inside the textarea container, top-left */}
+        {!isCallActive && selectedSkill && (
+          <div className="absolute top-3 left-3 z-10 pointer-events-auto">
+            <Badge
+              variant="secondary"
+              className="h-6 gap-1 pr-1 pl-2 text-xs bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span className="truncate max-w-[160px]">{selectedSkill.name}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedSkill(null)}
+                className="ml-0.5 p-0.5 rounded hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+                title={t('controlPanel.removeSkill') || '移除 skill'}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
+
+        <Popover
+          open={skillMenuOpen}
+          onOpenChange={(open) => {
+            setSkillMenuOpen(open);
+            if (!open) setSkillQuery('');
           }}
-          className="block w-full h-28 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[220px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0"
-        />
+        >
+          <PopoverAnchor asChild>
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                // Defer so selectionStart reflects the new value
+                requestAnimationFrame(updateSkillMenuFromInput);
+              }}
+              onKeyUp={() => updateSkillMenuFromInput()}
+              onClick={() => updateSkillMenuFromInput()}
+              placeholder={placeholderText}
+              disabled={isConnecting || (!isCallActive && (agentRunning || !activeSerial))}
+              onKeyDown={(e) => {
+                if (skillMenuOpen && filteredSkills.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setHighlightIndex((idx) => (idx + 1) % filteredSkills.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setHighlightIndex((idx) => (idx - 1 + filteredSkills.length) % filteredSkills.length);
+                    return;
+                  }
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    const skill = filteredSkills[highlightIndex];
+                    if (skill) pickSkill(skill);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSkillMenuOpen(false);
+                    setSkillQuery('');
+                    return;
+                  }
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const skill = filteredSkills[highlightIndex];
+                    if (skill) pickSkill(skill);
+                    return;
+                  }
+                }
+                if (e.key === 'Backspace' && !isCallActive && selectedSkill) {
+                  const el = textareaRef.current;
+                  if (el && (el.selectionStart ?? 0) === 0 && (el.selectionEnd ?? 0) === 0) {
+                    e.preventDefault();
+                    setSelectedSkill(null);
+                    return;
+                  }
+                }
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (!isButtonDisabled) {
+                    onButtonClick();
+                  }
+                }
+              }}
+              className={`block w-full h-28 bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-2xl p-4 pr-[220px] text-xs leading-relaxed text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none resize-none disabled:opacity-50 transition-colors dark:shadow-none m-0 ${!isCallActive && selectedSkill ? 'pt-11' : ''}`}
+            />
+          </PopoverAnchor>
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={6}
+            className="w-80 p-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 ring-1 ring-black/5 dark:ring-white/5 shadow-2xl"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            <Command
+              shouldFilter={false}
+              className="bg-white dark:bg-zinc-900"
+              value={highlightedName ?? ''}
+              onValueChange={(v) => {
+                const idx = filteredSkills.findIndex((s) => s.name === v);
+                if (idx >= 0) setHighlightIndex(idx);
+              }}
+            >
+              <div className="px-3 pt-2 pb-1 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between">
+                <span className="text-xxs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                  {t('controlPanel.skillMenuTitle') || 'Skills'}
+                </span>
+                {skillQuery && (
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500">/{skillQuery}</span>
+                )}
+              </div>
+              <CommandList className="max-h-64">
+                <CommandEmpty>
+                  <div className="flex flex-col items-center gap-1 py-2">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {skills.length === 0
+                        ? (t('controlPanel.skillEmpty') || '请在设置中配置 Skills 路径')
+                        : (t('controlPanel.skillNoMatch') || '未找到匹配的 skill')}
+                    </span>
+                  </div>
+                </CommandEmpty>
+                {filteredSkills.length > 0 && (
+                  <CommandGroup>
+                    {filteredSkills.map((s, idx) => (
+                      <CommandItem
+                        key={s.name}
+                        ref={(el) => {
+                          if (el) itemRefs.current.set(s.name, el as unknown as HTMLDivElement);
+                          else itemRefs.current.delete(s.name);
+                        }}
+                        value={s.name}
+                        onMouseEnter={() => setHighlightIndex(idx)}
+                        onSelect={() => pickSkill(s)}
+                        className="data-[selected=true]:bg-emerald-50 data-[selected=true]:text-emerald-700 dark:data-[selected=true]:bg-emerald-950/40 dark:data-[selected=true]:text-emerald-300 data-[selected=true]:ring-1 data-[selected=true]:ring-inset data-[selected=true]:ring-emerald-200 dark:data-[selected=true]:ring-emerald-500/30"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">{s.name}</span>
+                          {s.description && (
+                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+                              {s.description}
+                            </span>
+                          )}
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
           {isCallActive ? (

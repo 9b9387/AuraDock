@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, X, Key, Eye, EyeOff, Languages, Shield, Save } from 'lucide-react';
+import { Settings, X, Key, Eye, EyeOff, Languages, Shield, Save, FolderOpen, Sparkles } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -83,6 +83,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       await (window as any).adb.openSystemSettings();
     } catch (err) {
       console.error('[SettingsModal] Error opening system settings:', err);
+    }
+  };
+
+  const handlePickSkillsFolder = async () => {
+    try {
+      const folder = await (window as any).adb.skills.pickFolder();
+      if (folder) {
+        setLocalSettings({ ...localSettings, skillsPath: folder });
+      }
+    } catch (err) {
+      console.error('[SettingsModal] Error picking skills folder:', err);
     }
   };
 
@@ -243,6 +254,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <option value="en">{t('settings.langEn')}</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Section 2.5: Skills */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-extrabold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{t('settings.skillsSection') || 'SKILLS'}</span>
+            </h4>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">
+                {t('settings.skillsPath') || 'Skills 路径'}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={localSettings.skillsPath || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, skillsPath: e.target.value })}
+                  placeholder={t('settings.skillsPathPlaceholder') || '选择包含若干 SKILL.md 子目录的根目录'}
+                  className="flex-1 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 dark:focus:border-emerald-500 rounded-xl px-3 py-2.5 focus:outline-none transition-colors text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                />
+                <button
+                  type="button"
+                  onClick={handlePickSkillsFolder}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  {t('settings.browse') || '浏览…'}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                {t('settings.skillsPathTip') || '* 指定 ADK Skills 根目录，每个子目录应包含 SKILL.md（遵循 ADK Agent Skill 规范）。在输入框输入 / 即可选择。'}
+              </p>
             </div>
           </div>
 

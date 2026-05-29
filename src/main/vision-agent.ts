@@ -4,6 +4,7 @@ import { ToolRegistry } from './agent/tool-registry';
 import { AgentLoop } from './agent/agent-loop';
 import { AgentContext } from './agent/types';
 import { ConfigManager } from './config-manager';
+import { SkillManager } from './skill-manager';
 
 function truncateBase64AndThought(str: string): string {
   if (typeof str !== 'string') return str;
@@ -66,18 +67,21 @@ export class VisionAgent implements AgentContext {
   private screenshotPromise: { resolve: (data: string) => void; reject: (err: any) => void } | null = null;
   private loop: AgentLoop | null = null;
   private activeModel: string | null = null;
+  private activeSkillName: string | null = null;
 
   constructor() {
     this.setupIpc();
   }
 
-  private async ensureAgent() {
+  private async ensureAgent(skillName: string | null = null) {
     const settings = ConfigManager.loadSettings();
     const modelName = settings.visionAgentModel || 'gemini-3-flash-preview';
+    const normalizedSkill = skillName || null;
 
-    if (this.agent && this.activeModel === modelName) return;
+    if (this.agent && this.activeModel === modelName && this.activeSkillName === normalizedSkill) return;
 
-    this.log('status', `Initializing ADK Agent using model: ${modelName}...`);
+    const skillSuffix = normalizedSkill ? ` with skill: ${normalizedSkill}` : '';
+    this.log('status', `Initializing ADK Agent using model: ${modelName}${skillSuffix}...`);
     try {
       const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
       if (!apiKey) {
@@ -88,11 +92,26 @@ export class VisionAgent implements AgentContext {
       process.env.GOOGLE_API_KEY = apiKey;
       process.env.GEMINI_API_KEY = apiKey;
 
-      const { LlmAgent, setLogger } = await import('@google/adk');
+      const adk = await import('@google/adk');
+      const { LlmAgent, setLogger, SkillToolset } = adk;
       setLogger(new CustomAdkLogger());
       
       const registry = new ToolRegistry(this);
       const tools = registry.getTools();
+
+      // Build the tools array. When a skill is selected, attach SkillToolset
+      // (ADK-recommended), keeping the existing UI tools as additionalTools.
+      let llmTools: any[] = tools;
+      if (normalizedSkill && settings.skillsPath) {
+        const skill = await SkillManager.loadSkill(settings.skillsPath, normalizedSkill);
+        if (skill) {
+          const toolset = new SkillToolset([skill], { additionalTools: tools });
+          llmTools = [toolset];
+          this.log('status', `Loaded skill: ${normalizedSkill}`);
+        } else {
+          this.log('status', `Failed to load skill "${normalizedSkill}", running without it.`);
+        }
+      }
 
       this.agent = new LlmAgent({
         name: 'VisionMobileAgent',
@@ -108,12 +127,13 @@ COORDINATE SYSTEM:
 TASK COMPLETION:
 - If all steps in your plan are completed, or the task goal is fully achieved, DO NOT call any more tools. Just output a final text explanation stating that the task is finished (e.g. "Task complete: [explanation]").
 - Do not perform redundant, continuous, or extra UI operations after your plan has been executed.`, 
-        tools: tools,
+        tools: llmTools,
       });
 
       this.activeModel = modelName;
+      this.activeSkillName = normalizedSkill;
       this.loop = new AgentLoop(this, this.agent);
-      this.log('status', `Agent successfully initialized with model: ${modelName}.`);
+      this.log('status', `Agent successfully initialized with model: ${modelName}${skillSuffix}.`);
     } catch (e: any) {
       console.error('[VisionAgent] Failed to load ADK:', e);
       this.log('status', `Agent Initialization Failed: ${e.message}`);
@@ -128,19 +148,24 @@ TASK COMPLETION:
   }
 
   private setupIpc() {
-    ipcMain.on('agent:start', async (event, task) => {
+    ipcMain.on('agent:start', async (event, payload) => {
+      const { task, skillName } = typeof payload === 'string'
+        ? { task: payload, skillName: null as string | null }
+        : { task: payload?.task ?? '', skillName: (payload?.skillName ?? null) as string | null };
+
       this.currentSerial = this.findActiveSerial();
       if (!this.currentSerial) {
         this.log('status', 'No active device connected.');
         return;
       }
 
-      this.log('status', `Agent started for task: ${task}`);
+      const skillSuffix = skillName ? ` (skill: ${skillName})` : '';
+      this.log('status', `Agent started for task: ${task}${skillSuffix}`);
       
       try {
-        await this.ensureAgent();
+        await this.ensureAgent(skillName);
         if (!this.loop) throw new Error('Agent failed to initialize');
-        this.log('status', `Executing task using model: ${this.activeModel}`);
+        this.log('status', `Executing task using model: ${this.activeModel}${skillSuffix}`);
         this.notifyStatus(true);
         await this.loop.run(task);
       } catch (e: any) {

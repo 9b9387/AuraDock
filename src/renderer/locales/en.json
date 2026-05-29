@@ -56,7 +56,11 @@
     "startVoiceCall": "Start Gemini Voice Call",
     "stopAgent": "Stop Current Agent",
     "sendTextToAssistant": "Send text to assistant",
-    "runAgentTask": "Run Agent Task (Enter)"
+    "runAgentTask": "Run Agent Task (Enter)",
+    "skillMenuTitle": "Skills",
+    "skillEmpty": "Configure skills folder in Settings",
+    "skillNoMatch": "No matching skill",
+    "removeSkill": "Remove skill"
   },
   "micCheck": {
     "noMicTitle": "No Microphone Detected",
@@ -109,6 +113,11 @@
     "saving": "Saving...",
     "saveSuccess": "Saved ✓",
     "saveError": "Failed ✗",
-    "save": "Save Settings"
+    "save": "Save Settings",
+    "skillsSection": "Skills",
+    "skillsPath": "Skills Folder",
+    "skillsPathPlaceholder": "Pick a folder containing SKILL.md subdirectories",
+    "skillsPathTip": "* Specify the ADK Skills root directory. Each subfolder must contain a SKILL.md (per the ADK Agent Skill spec). Type / in the input box to pick one.",
+    "browse": "Browse..."
   }
 }

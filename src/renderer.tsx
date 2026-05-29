@@ -9,7 +9,7 @@ import { DeviceSelector } from './renderer/components/DeviceSelector';
 import { ScreenMirror } from './renderer/components/ScreenMirror';
 import { NavigationBar } from './renderer/components/NavigationBar';
 import { UnifiedLogs } from './renderer/components/UnifiedLogs';
-import { ControlPanel } from './renderer/components/ControlPanel';
+import { ControlPanel, type SkillSummary } from './renderer/components/ControlPanel';
 import { SettingsModal } from './renderer/components/SettingsModal';
 import { MicCheckModal, MicErrorType } from './renderer/components/MicCheckModal';
 
@@ -131,6 +131,25 @@ export function App() {
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentInput, setAgentInput] = useState('');
   const [agentLogs, setAgentLogs] = useState<LogEntry[]>([]);
+
+  // Skills state
+  const [skillsList, setSkillsList] = useState<SkillSummary[]>([]);
+  const [selectedSkill, setSelectedSkill] = useState<SkillSummary | null>(null);
+
+  const loadSkills = useCallback(async () => {
+    try {
+      const list = await (window as any).adb.skills.list();
+      if (Array.isArray(list)) {
+        setSkillsList(list);
+      }
+    } catch (err) {
+      console.error('[Renderer] Failed to load skills:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSkills();
+  }, [loadSkills]);
 
   const agentRunningRef = useRef(agentRunning);
   useEffect(() => {
@@ -374,6 +393,7 @@ export function App() {
     setGeminiLogs([]);
     setAgentInput('');
     setGeminiChatInput('');
+    setSelectedSkill(null);
 
     await (window as any).adb.db.saveSession(newSessionItem);
   }, [agentRunning, geminiStatus, i18n.language]);
@@ -898,13 +918,14 @@ export function App() {
     const task = agentInput.trim();
     if (!task) return;
 
-    (window as any).adb.startAgent(task);
+    const skillName = selectedSkill?.name ?? null;
+    (window as any).adb.startAgent({ task, skillName });
     setAgentLogs((prev) => [
       ...prev,
-      { type: 'status', message: `Starting task: ${task}`, timestamp: Date.now() }
+      { type: 'status', message: `Starting task: ${task}${skillName ? ` (skill: ${skillName})` : ''}`, timestamp: Date.now() }
     ]);
     setAgentRunning(true);
-  }, [agentInput]);
+  }, [agentInput, selectedSkill]);
 
   // Wire Gemini Live Call Callback Events
   useEffect(() => {
@@ -1437,6 +1458,10 @@ INSTRUCTION FOR TAKE-OVER:
               handleStartLiveCall={handleStartLiveCall}
               handleStopLiveCall={handleStopLiveCall}
               textOnlyMode={textOnlyMode}
+              skills={skillsList}
+              selectedSkill={selectedSkill}
+              setSelectedSkill={setSelectedSkill}
+              onLoadSkills={loadSkills}
             />
           </div>
         )}
@@ -1452,6 +1477,7 @@ INSTRUCTION FOR TAKE-OVER:
             if (newSettings.language) {
               i18n.changeLanguage(newSettings.language);
             }
+            loadSkills();
           }}
         />
       )}
