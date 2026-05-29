@@ -68,9 +68,60 @@ export class VisionAgent implements AgentContext {
   private loop: AgentLoop | null = null;
   private activeModel: string | null = null;
   private activeSkillName: string | null = null;
+  private busy = false;
 
   constructor() {
     this.setupIpc();
+  }
+
+  /**
+   * Whether an agent task is currently executing. Used by WatchManager to avoid
+   * launching a reply task while another (manual or watch-triggered) task runs.
+   */
+  public isBusy(): boolean {
+    return this.busy;
+  }
+
+  /**
+   * Resolve the serial of the currently connected device, for callers (e.g. WatchManager)
+   * that need device-scoped adb access without owning a scrcpy service reference.
+   */
+  public getActiveDeviceSerial(): string | null {
+    return this.findActiveSerial();
+  }
+
+  /**
+   * Programmatic entry point to execute an agent task. Reuses the same ADK machinery
+   * as the manual `agent:start` IPC, with a busy guard so concurrent triggers are dropped.
+   */
+  public async runTask(task: string, skillName: string | null = null): Promise<void> {
+    if (this.busy) {
+      this.log('status', 'Agent is busy; ignoring new task request.');
+      return;
+    }
+
+    this.currentSerial = this.findActiveSerial();
+    if (!this.currentSerial) {
+      this.log('status', 'No active device connected.');
+      return;
+    }
+
+    const skillSuffix = skillName ? ` (skill: ${skillName})` : '';
+    this.log('status', `Agent started for task: ${task}${skillSuffix}`);
+
+    this.busy = true;
+    try {
+      await this.ensureAgent(skillName);
+      if (!this.loop) throw new Error('Agent failed to initialize');
+      this.log('status', `Executing task using model: ${this.activeModel}${skillSuffix}`);
+      this.notifyStatus(true);
+      await this.loop.run(task);
+    } catch (e: any) {
+      this.log('status', `Agent Error: ${e.message}`);
+    } finally {
+      this.busy = false;
+      this.notifyStatus(false);
+    }
   }
 
   private async ensureAgent(skillName: string | null = null) {
@@ -93,30 +144,16 @@ export class VisionAgent implements AgentContext {
       process.env.GEMINI_API_KEY = apiKey;
 
       const adk = await import('@google/adk');
-      const { LlmAgent, setLogger, SkillToolset } = adk;
+      const { LlmAgent, setLogger } = adk;
       setLogger(new CustomAdkLogger());
       
       const registry = new ToolRegistry(this);
       const tools = registry.getTools();
 
-      // Build the tools array. When a skill is selected, attach SkillToolset
-      // (ADK-recommended), keeping the existing UI tools as additionalTools.
-      let llmTools: any[] = tools;
-      if (normalizedSkill && settings.skillsPath) {
-        const skill = await SkillManager.loadSkill(settings.skillsPath, normalizedSkill);
-        if (skill) {
-          const toolset = new SkillToolset([skill], { additionalTools: tools });
-          llmTools = [toolset];
-          this.log('status', `Loaded skill: ${normalizedSkill}`);
-        } else {
-          this.log('status', `Failed to load skill "${normalizedSkill}", running without it.`);
-        }
-      }
-
-      this.agent = new LlmAgent({
-        name: 'VisionMobileAgent',
-        model: modelName,
-        instruction: `You are a strategic autonomous Vision Agent.
+      // Base instruction. A selected skill is injected as GUIDANCE text (not as a
+      // SkillToolset): this agent only acts through its own device tools, so the skill's
+      // body teaches it WHAT to do, while it keeps using tap/swipe/input_text/etc.
+      let instruction = `You are a strategic autonomous Vision Agent.
         
 COORDINATE SYSTEM:
 - All UI coordinates (tap, swipe) MUST be normalized from 0 to 1000.
@@ -126,8 +163,26 @@ COORDINATE SYSTEM:
 
 TASK COMPLETION:
 - If all steps in your plan are completed, or the task goal is fully achieved, DO NOT call any more tools. Just output a final text explanation stating that the task is finished (e.g. "Task complete: [explanation]").
-- Do not perform redundant, continuous, or extra UI operations after your plan has been executed.`, 
-        tools: llmTools,
+- Do not perform redundant, continuous, or extra UI operations after your plan has been executed.`;
+
+      if (normalizedSkill && settings.skillsPath) {
+        const skill = await SkillManager.loadSkill(settings.skillsPath, normalizedSkill);
+        if (skill) {
+          const sName = skill.frontmatter?.name ?? normalizedSkill;
+          const sDesc = skill.frontmatter?.description ?? '';
+          const sBody = skill.instructions ?? '';
+          instruction += `\n\n=== ACTIVE SKILL: ${sName} ===\n${sDesc ? sDesc + '\n\n' : ''}${sBody}\n=== END SKILL ===\n\nFollow the ACTIVE SKILL guidance above. You can ONLY act through your available device tools (launch_app, tap, swipe, input_text, clear_text, key_event, wait). Never call any list_skills / load_skill / run_skill_* tools and never try to run shell or python scripts.`;
+          this.log('status', `Loaded skill: ${normalizedSkill}`);
+        } else {
+          this.log('status', `Failed to load skill "${normalizedSkill}", running without it.`);
+        }
+      }
+
+      this.agent = new LlmAgent({
+        name: 'VisionMobileAgent',
+        model: modelName,
+        instruction,
+        tools,
       });
 
       this.activeModel = modelName;
@@ -153,26 +208,7 @@ TASK COMPLETION:
         ? { task: payload, skillName: null as string | null }
         : { task: payload?.task ?? '', skillName: (payload?.skillName ?? null) as string | null };
 
-      this.currentSerial = this.findActiveSerial();
-      if (!this.currentSerial) {
-        this.log('status', 'No active device connected.');
-        return;
-      }
-
-      const skillSuffix = skillName ? ` (skill: ${skillName})` : '';
-      this.log('status', `Agent started for task: ${task}${skillSuffix}`);
-      
-      try {
-        await this.ensureAgent(skillName);
-        if (!this.loop) throw new Error('Agent failed to initialize');
-        this.log('status', `Executing task using model: ${this.activeModel}${skillSuffix}`);
-        this.notifyStatus(true);
-        await this.loop.run(task);
-      } catch (e: any) {
-        this.log('status', `Agent Error: ${e.message}`);
-      } finally {
-        this.notifyStatus(false);
-      }
+      await this.runTask(task, skillName);
     });
 
     ipcMain.on('agent:stop', () => {

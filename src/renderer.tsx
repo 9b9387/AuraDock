@@ -12,6 +12,8 @@ import { UnifiedLogs } from './renderer/components/UnifiedLogs';
 import { ControlPanel, type SkillSummary } from './renderer/components/ControlPanel';
 import { SettingsModal } from './renderer/components/SettingsModal';
 import { MicCheckModal, MicErrorType } from './renderer/components/MicCheckModal';
+import { WatchModePanel } from './renderer/components/WatchModePanel';
+import { FrameDiffDetector } from './renderer/services/frame-diff';
 
 import { 
   scrcpyAudioQueue, 
@@ -25,7 +27,7 @@ import type { ConnectionStatus } from './renderer/services/gemini-live-service';
 import type { AdbDeviceInfo } from './types';
 import type { LogEntry } from './renderer/types';
 import { Tooltip } from './renderer/components/Tooltip';
-import { History, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { History, ChevronDown, Plus, Trash2, Radar } from 'lucide-react';
 
 export interface SessionHistoryItem {
   id: string;
@@ -155,6 +157,13 @@ export function App() {
   useEffect(() => {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
+
+  // Watch Mode (值守模式) State
+  const [watchRunning, setWatchRunning] = useState(false);
+  const [showWatchPanel, setShowWatchPanel] = useState(false);
+  // Whether the renderer should compute frame-diff signals (driven by main process).
+  const watchFrameDiffEnabledRef = useRef(false);
+  const frameDiffRef = useRef<FrameDiffDetector | null>(null);
 
   // Session History State (SQLite)
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
@@ -665,8 +674,32 @@ export function App() {
     (window as any).adb.onAgentLog(handleLog);
     (window as any).adb.onScreenshotRequest(handleScreenshotRequest);
 
+    // Watch Mode (值守模式) wiring
+    const unsubscribeWatchLog = (window as any).adb.watch.onLog((log: any) => {
+      setAgentLogs((prev) => [
+        ...prev,
+        { type: log.type, message: `[值守] ${log.message}`, timestamp: Date.now() }
+      ]);
+    });
+    const unsubscribeWatchStatus = (window as any).adb.watch.onStatusChange((status: { running: boolean }) => {
+      setWatchRunning(status.running);
+    });
+    const unsubscribeFrameDiff = (window as any).adb.watch.onEnableFrameDiff((enabled: boolean) => {
+      watchFrameDiffEnabledRef.current = enabled;
+      if (enabled) {
+        frameDiffRef.current?.reset();
+      }
+    });
+    // Sync initial watch status (e.g. after a renderer reload while watch is running).
+    (window as any).adb.watch.getStatus().then((s: { running: boolean }) => {
+      if (s) setWatchRunning(s.running);
+    }).catch(() => {});
+
     return () => {
       if (unsubscribeStatus) unsubscribeStatus();
+      if (unsubscribeWatchLog) unsubscribeWatchLog();
+      if (unsubscribeWatchStatus) unsubscribeWatchStatus();
+      if (unsubscribeFrameDiff) unsubscribeFrameDiff();
     };
   }, []);
 
@@ -699,6 +732,14 @@ export function App() {
             canvas.height = frame.displayHeight;
           }
           ctx?.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
+          // Watch Mode Layer-0: zero-token frame-diff signal (only when enabled by main).
+          if (watchFrameDiffEnabledRef.current) {
+            if (!frameDiffRef.current) frameDiffRef.current = new FrameDiffDetector();
+            if (frameDiffRef.current.process(canvas)) {
+              (window as any).adb.watch.sendScreenSignal();
+            }
+          }
         }
         frame.close();
       },
@@ -1282,6 +1323,9 @@ INSTRUCTION FOR TAKE-OVER:
       { type: 'status', message: 'Emergency Stop: Vision Agent halted.', timestamp: Date.now() }
     ]);
 
+    // Also halt watch mode so it cannot re-trigger a new task.
+    (window as any).adb.watch.stop();
+
     geminiLiveService.disconnect();
   }, []);
 
@@ -1357,6 +1401,23 @@ INSTRUCTION FOR TAKE-OVER:
               <span className="text-sm font-extrabold text-zinc-700 dark:text-zinc-100 tracking-wider">智能协作</span>
               
               <div className="flex items-center gap-1.5 relative">
+                {/* 值守模式按钮 */}
+                <Tooltip content={t('watch.title') || '值守模式'} position="bottom">
+                  <button
+                    onClick={() => setShowWatchPanel(true)}
+                    className={`relative flex items-center justify-center p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer border border-transparent ${
+                      watchRunning
+                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/30'
+                        : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-800 dark:hover:text-zinc-100 hover:border-zinc-200 dark:hover:border-zinc-800'
+                    }`}
+                  >
+                    <Radar className={`w-4 h-4 ${watchRunning ? 'animate-pulse' : ''}`} />
+                    {watchRunning && (
+                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    )}
+                  </button>
+                </Tooltip>
+
                 {/* 历史对话按钮 */}
                 <div className="relative" ref={historyDropdownRef}>
                   <Tooltip content={t('logs.historySessions') || '历史对话'} position="bottom">
@@ -1451,6 +1512,7 @@ INSTRUCTION FOR TAKE-OVER:
               agentInput={agentInput}
               setAgentInput={setAgentInput}
               agentRunning={agentRunning}
+              watchRunning={watchRunning}
               activeSerial={activeSerial}
               handleStartAgent={handleStartAgent}
               handleGlobalStop={handleGlobalStop}
@@ -1481,6 +1543,16 @@ INSTRUCTION FOR TAKE-OVER:
           }}
         />
       )}
+
+      {/* Watch Mode (值守模式) Panel */}
+      <WatchModePanel
+        open={showWatchPanel}
+        onOpenChange={setShowWatchPanel}
+        running={watchRunning}
+        activeSerial={activeSerial}
+        skills={skillsList}
+        onLoadSkills={loadSkills}
+      />
 
       {/* Microphone Check Modal Overlay */}
       <MicCheckModal

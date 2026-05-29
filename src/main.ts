@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 import { scrcpyManager } from './main/scrcpy-manager';
 import { VisionAgent } from './main/vision-agent';
+import { WatchManager } from './main/watch-manager';
 import { ConfigManager } from './main/config-manager';
 import { SkillManager } from './main/skill-manager';
 import { DatabaseManager } from './main/database';
@@ -144,6 +145,10 @@ app.on('ready', async () => {
   // Initialize VisionAgent
   const visionAgent = new VisionAgent();
   console.log('[Main] VisionAgent initialized');
+
+  // Initialize WatchManager (值守模式), reusing the VisionAgent for Layer-2 actions
+  new WatchManager(visionAgent);
+  console.log('[Main] WatchManager initialized');
 
   // Setup theme IPC handlers
   ipcMain.handle('dark-mode:set', (_event, theme: 'dark' | 'light' | 'system') => {

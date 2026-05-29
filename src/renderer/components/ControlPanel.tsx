@@ -81,6 +81,7 @@ interface ControlPanelProps {
   agentInput: string;
   setAgentInput: (val: string) => void;
   agentRunning: boolean;
+  watchRunning?: boolean;
   activeSerial: string | null;
   handleStartAgent: () => void;
   handleGlobalStop: () => void;
@@ -103,6 +104,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   agentInput,
   setAgentInput,
   agentRunning,
+  watchRunning = false,
   activeSerial,
   handleStartAgent,
   handleGlobalStop,
@@ -136,8 +138,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  // 1. Determine if button should act as a Stop button
-  const isStopButton = !isCallActive && agentRunning;
+  // 1. Determine if button should act as a Stop button.
+  // Also acts as Stop when only watch mode is running (agent idle) so it can be halted.
+  const isStopButton = !isCallActive && (agentRunning || watchRunning);
 
   // 2. Compute disabled state based on role
   const isSendDisabled = isConnecting || !inputValue.trim() || (!isCallActive && !activeSerial);

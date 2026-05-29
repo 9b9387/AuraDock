@@ -3,6 +3,41 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
+export type WatchStopMode = 'manual' | 'duration' | 'until';
+
+export interface WatchStopConfig {
+  mode: WatchStopMode;
+  /** For mode 'duration': run for this many milliseconds, then auto-stop. */
+  durationMs?: number;
+  /** For mode 'until': epoch milliseconds at which to auto-stop. */
+  until?: number;
+  /** Optional cap on the number of triggered actions before auto-stop. */
+  maxTriggers?: number;
+}
+
+/**
+ * A "watch task". Fully skill-driven: a single Watch Skill (one per app) supplies the
+ * relevance condition, the zero-token notification pre-filter (packages/keywords), the
+ * action, and the UI-navigation know-how. No per-app configuration lives here.
+ */
+export interface WatchConfig {
+  /** Name of the Watch Skill that defines what to watch and how to act. */
+  skillName: string;
+  triggers: { notification: boolean; screenDiff: boolean };
+  stop: WatchStopConfig;
+}
+
+export interface WatchModeSettings {
+  /** Cheap model used by the Layer-1 classifier gate. */
+  classifierModel: string;
+  /** Notification polling interval in ms (no-token adb dumpsys). */
+  pollIntervalMs: number;
+  /** Cooldown after a triggered action before detection resumes. */
+  cooldownMs: number;
+  /** Last WatchConfig used, persisted so the panel restores it. */
+  lastConfig: WatchConfig | null;
+}
+
 export interface AppSettings {
   theme: 'dark' | 'light' | 'system';
   language: 'zh' | 'en';
@@ -17,6 +52,7 @@ export interface AppSettings {
     notifications: boolean;
     screenCapture: boolean;
   };
+  watchMode: WatchModeSettings;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -32,6 +68,12 @@ const DEFAULT_SETTINGS: AppSettings = {
     microphone: true,
     notifications: false,
     screenCapture: false,
+  },
+  watchMode: {
+    classifierModel: 'gemini-3-flash-preview',
+    pollIntervalMs: 2500,
+    cooldownMs: 8000,
+    lastConfig: null,
   }
 };
 
@@ -64,6 +106,10 @@ export class ConfigManager {
       permissions: {
         ...DEFAULT_SETTINGS.permissions,
         ...(settings.permissions || {})
+      },
+      watchMode: {
+        ...DEFAULT_SETTINGS.watchMode,
+        ...(settings.watchMode || {})
       }
     };
 
@@ -78,6 +124,15 @@ export class ConfigManager {
     }
 
     return merged;
+  }
+
+  /**
+   * Persist the most recently used WatchConfig without touching unrelated settings.
+   */
+  public static saveWatchConfig(config: WatchConfig | null): boolean {
+    const settings = this.loadSettings();
+    settings.watchMode = { ...settings.watchMode, lastConfig: config };
+    return this.saveSettings(settings);
   }
 
   /**

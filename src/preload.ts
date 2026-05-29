@@ -56,4 +56,26 @@ contextBridge.exposeInMainWorld("adb", {
     list: () => ipcRenderer.invoke("skills:list"),
     pickFolder: () => ipcRenderer.invoke("skills:pick-folder"),
   },
+  watch: {
+    start: (config: any) => ipcRenderer.send("watch:start", config),
+    stop: () => ipcRenderer.send("watch:stop"),
+    updateConfig: (config: any) => ipcRenderer.invoke("watch:update-config", config),
+    getStatus: () => ipcRenderer.invoke("watch:get-status"),
+    sendScreenSignal: () => ipcRenderer.send("watch:screen-signal"),
+    onLog: (callback: (log: any) => void) => {
+      const listener = (_event: any, log: any) => callback(log);
+      ipcRenderer.on("watch:log", listener);
+      return () => ipcRenderer.removeListener("watch:log", listener);
+    },
+    onStatusChange: (callback: (status: { running: boolean }) => void) => {
+      const listener = (_event: any, status: { running: boolean }) => callback(status);
+      ipcRenderer.on("watch:status-change", listener);
+      return () => ipcRenderer.removeListener("watch:status-change", listener);
+    },
+    onEnableFrameDiff: (callback: (enabled: boolean) => void) => {
+      const listener = (_event: any, enabled: boolean) => callback(enabled);
+      ipcRenderer.on("watch:enable-framediff", listener);
+      return () => ipcRenderer.removeListener("watch:enable-framediff", listener);
+    },
+  },
 });

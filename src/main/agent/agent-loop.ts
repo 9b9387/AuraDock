@@ -225,8 +225,9 @@ export class AgentLoop {
           }
         } else {
           // Non-UI tool
+          const failed = toolResult && toolResult.status === 'error';
           this.currentContext = `Executed ${toolName}. Result: ${JSON.stringify(toolResult)}`;
-          this.actionHistory.push(`Turn ${cycleCount}: ${toolName} -> Success`);
+          this.actionHistory.push(`Turn ${cycleCount}: ${toolName} -> ${failed ? `Error: ${toolResult.message || 'failed'}` : 'Success'}`);
         }
       }
 
