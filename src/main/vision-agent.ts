@@ -91,6 +91,62 @@ export class VisionAgent implements AgentContext {
   }
 
   /**
+   * Helper method to dynamically match the task prompt to an available skill based on name,
+   * description, package names, keywords, or manual search phrases.
+   */
+  private async matchSkillForTask(task: string): Promise<string | null> {
+    const settings = ConfigManager.loadSettings();
+    if (!settings.skillsPath || !task) return null;
+
+    try {
+      const { loadAllSkillsInDir } = await import('@google/adk');
+      const skills = await loadAllSkillsInDir(settings.skillsPath);
+      const skillsList = Object.values(skills);
+      const normalizedTask = task.toLowerCase().trim();
+
+      for (const skill of skillsList) {
+        const sName = (skill.frontmatter?.name || '').toLowerCase();
+        const sDesc = (skill.frontmatter?.description || '').toLowerCase();
+        
+        // Match exact or partial skill name (with space mapping e.g. "adb-keyboard" to "adb keyboard")
+        const nameWithSpaces = sName.replace(/[-_]/g, ' ');
+        if (normalizedTask.includes(sName) || normalizedTask.includes(nameWithSpaces)) {
+          return skill.frontmatter.name;
+        }
+
+        // Match metadata keywords and packages
+        const watchMeta = skill.frontmatter?.metadata?.watch as any;
+        const keywords = Array.isArray(watchMeta?.keywords) ? watchMeta.keywords : [];
+        const packages = Array.isArray(watchMeta?.packages) ? watchMeta.packages : [];
+
+        // Add manual keyword associations for seamless user experience
+        const manualKeywords: string[] = [];
+        if (sName === 'adb-keyboard') {
+          manualKeywords.push('adb keyboard', 'adbkeyboard', '输入法', '设置输入法', '切换输入法', '键盘');
+        }
+        if (sName === 'wechat-watch') {
+          manualKeywords.push('wechat', '微信', '值守', '自动回复');
+        }
+
+        const matchesKeyword = [...keywords, ...packages, ...manualKeywords].some(kw =>
+          normalizedTask.includes(String(kw).toLowerCase())
+        );
+        if (matchesKeyword) {
+          return skill.frontmatter.name;
+        }
+
+        // Match against critical description content
+        if (sDesc.includes(normalizedTask) || (normalizedTask.length > 4 && sDesc.includes(normalizedTask))) {
+          return skill.frontmatter.name;
+        }
+      }
+    } catch (e) {
+      console.error('[VisionAgent] Failed to match task with skills:', e);
+    }
+    return null;
+  }
+
+  /**
    * Programmatic entry point to execute an agent task. Reuses the same ADK machinery
    * as the manual `agent:start` IPC, with a busy guard so concurrent triggers are dropped.
    */
@@ -106,12 +162,22 @@ export class VisionAgent implements AgentContext {
       return;
     }
 
-    const skillSuffix = skillName ? ` (skill: ${skillName})` : '';
+    // Dynamic skill matching if no specific skill is active
+    let activeSkillName = skillName;
+    if (!activeSkillName) {
+      activeSkillName = await this.matchSkillForTask(task);
+    }
+
+    if (activeSkillName) {
+      this.log('status', `🎯 命中并加载 Skill: ${activeSkillName}`);
+    }
+
+    const skillSuffix = activeSkillName ? ` (skill: ${activeSkillName})` : '';
     this.log('status', `Agent started for task: ${task}${skillSuffix}`);
 
     this.busy = true;
     try {
-      await this.ensureAgent(skillName);
+      await this.ensureAgent(activeSkillName);
       if (!this.loop) throw new Error('Agent failed to initialize');
       this.log('status', `Executing task using model: ${this.activeModel}${skillSuffix}`);
       this.notifyStatus(true);
@@ -175,6 +241,21 @@ TASK COMPLETION:
           this.log('status', `Loaded skill: ${normalizedSkill}`);
         } else {
           this.log('status', `Failed to load skill "${normalizedSkill}", running without it.`);
+        }
+      } else if (settings.skillsPath) {
+        // If no specific skill is matched/active, inject list of available skills according to ADK specification standard
+        try {
+          const skillsMap = await adk.loadAllSkillsInDir(settings.skillsPath);
+          const skillsList = Object.values(skillsMap);
+          if (skillsList.length > 0) {
+            instruction += `\n\n=== AVAILABLE SYSTEM SKILLS ===\nYou have the following skills registered in your environment that you can draw inspiration from or request the user/system to invoke for specific tasks:\n`;
+            skillsList.forEach((s: any) => {
+              instruction += `- **${s.frontmatter.name}**: ${s.frontmatter.description || ''}\n`;
+            });
+            instruction += `=================================\n`;
+          }
+        } catch (e) {
+          console.error('[VisionAgent] Failed to inject available skills list into agent instructions:', e);
         }
       }
 
